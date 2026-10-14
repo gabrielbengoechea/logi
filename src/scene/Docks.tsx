@@ -78,28 +78,37 @@ function Truck({ index }: { index: number }) {
         <boxGeometry args={[2.57, 0.3, TRAILER - 0.4]} />
         <meshStandardMaterial color="#1f3557" roughness={0.5} />
       </mesh>
-      {/* Chasis y ruedas. */}
+      {/* Chasis del semirremolque, apoyado adelante sobre la quinta rueda del tractor. */}
       <mesh position={[0, -0.25, TRAILER / 2]}>
-        <boxGeometry args={[1.2, 0.3, TRAILER - 1]} />
+        <boxGeometry args={[1.2, 0.3, TRAILER - 0.6]} />
         <meshStandardMaterial color="#2a2d31" />
       </mesh>
-      {[1.6, 2.9, 4.2, TRAILER + 2.4, TRAILER + 5.2].map((z) => (
+      {/* Ruedas: tres ejes atrás del semirremolque; dos ejes traseros del tractor bajo el frente y uno delantero. */}
+      {[1.6, 2.9, 4.2, TRAILER - 1.9, TRAILER - 0.6, TRAILER + 2.6].map((z) => (
         <mesh key={z} position={[0, GROUND + 0.5, z]} rotation-z={Math.PI / 2}>
           <cylinderGeometry args={[0.5, 0.5, 2.45, 16]} />
           <meshStandardMaterial color="#1b1c1e" roughness={0.9} />
         </mesh>
       ))}
-      {/* Tractor. */}
-      <mesh name="cab" position={[0, GROUND + 2.1, TRAILER + 4.6]} castShadow>
+      {/* Tractor: chasis desde abajo del semirremolque hasta el paragolpes, quinta rueda y cabina. */}
+      <mesh position={[0, GROUND + 0.75, TRAILER + 0.4]}>
+        <boxGeometry args={[1.1, 0.4, 6]} />
+        <meshStandardMaterial color="#2a2d31" />
+      </mesh>
+      <mesh position={[0, -0.18, TRAILER - 1.2]}>
+        <boxGeometry args={[1.6, 0.16, 1.6]} />
+        <meshStandardMaterial color="#3a3d42" metalness={0.5} roughness={0.5} />
+      </mesh>
+      <mesh name="cab" position={[0, GROUND + 2.1, TRAILER + 2.25]} castShadow>
         <boxGeometry args={[2.5, 2.8, 2.3]} />
         <meshStandardMaterial color="#ffffff" roughness={0.4} metalness={0.2} />
       </mesh>
-      <mesh position={[0, GROUND + 2.6, TRAILER + 5.78]}>
+      <mesh position={[0, GROUND + 2.6, TRAILER + 3.42]}>
         <boxGeometry args={[2.2, 1.0, 0.05]} />
         <meshStandardMaterial color="#26323f" roughness={0.1} metalness={0.6} />
       </mesh>
-      <mesh position={[0, GROUND + 1.0, TRAILER + 3.4]}>
-        <boxGeometry args={[2.4, 0.6, 4.6]} />
+      <mesh position={[0, GROUND + 0.6, TRAILER + 3.45]}>
+        <boxGeometry args={[2.5, 0.35, 0.15]} />
         <meshStandardMaterial color="#2a2d31" />
       </mesh>
     </group>
@@ -200,7 +209,7 @@ export default function Docks() {
       <instancedMesh ref={staged} args={[stagedGeo, stagedMat, STAGE_MAX]} castShadow receiveShadow frustumCulled={false} />
       <group ref={doors}>
         {DOCKS.map((d, i) => (
-          <mesh key={i} position={[d.x, 1.9, HW - 0.05]} material={doorMat}>
+          <mesh key={i} position={[d.x, 1.9, HW - 0.1]} material={doorMat}>
             <planeGeometry args={[3.4, 3.8]} />
           </mesh>
         ))}

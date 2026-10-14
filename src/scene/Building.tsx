@@ -328,7 +328,7 @@ function DockDoors() {
             </group>
           ))}
           {/* Persiana enrollada arriba y niveladora en el piso. */}
-          <mesh position={[0, DOOR.h - 0.25, -0.3]}>
+          <mesh position={[0, DOOR.h - 0.25, -0.5]}>
             <boxGeometry args={[DOOR.w, 0.5, 0.5]} />
             <meshStandardMaterial color="#a9b1b9" metalness={0.4} roughness={0.5} />
           </mesh>
@@ -345,19 +345,19 @@ function DockDoors() {
 /** Oficinas de dos pisos con ventanal hacia la nave. */
 function Offices() {
   return (
-    <group position={[-56, 0, -31]}>
+    <group position={[-56, 0, -30.3]}>
       <mesh position={[0, 3.25, 0]} castShadow receiveShadow>
         <boxGeometry args={[12, 6.5, 18]} />
         <meshStandardMaterial color="#f4f5f6" roughness={0.8} />
       </mesh>
       {[1.8, 5].map((y) => (
-        <mesh key={y} position={[6.01, y, 0]}>
-          <boxGeometry args={[0.05, 1.4, 16]} />
+        <mesh key={y} position={[6.04, y, 0]}>
+          <boxGeometry args={[0.06, 1.4, 16]} />
           <meshStandardMaterial color="#5d7fa3" roughness={0.15} metalness={0.4} />
         </mesh>
       ))}
       <mesh position={[0, 6.6, 0]}>
-        <boxGeometry args={[12.2, 0.2, 18.2]} />
+        <boxGeometry args={[12.3, 0.2, 18.3]} />
         <meshStandardMaterial color="#1f3557" />
       </mesh>
     </group>
