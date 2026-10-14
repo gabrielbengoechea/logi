@@ -4,14 +4,15 @@ import Calculator from './Calculator'
 import { SectionTitle } from './controls'
 import { Icon, type IconName } from './icons'
 import Simulator from './Simulator'
+import Activities from './Activities'
 import Deliveries from './Deliveries'
 import GamePanel from './Game'
 import Legend from './Legend'
 import ProductCard from './ProductCard'
 import Today from './Today'
 
-type Route = 'inicio' | 'simulador' | 'calculadora' | 'juego'
-const TITLES: Record<Exclude<Route, 'inicio'>, string> = { simulador: 'Simulador', calculadora: 'Calculadora del curso', juego: 'Modo juego' }
+type Route = 'inicio' | 'simulador' | 'calculadora' | 'juego' | 'actividades'
+const TITLES: Record<Exclude<Route, 'inicio'>, string> = { simulador: 'Simulador', calculadora: 'Calculadora del curso', juego: 'Modo juego', actividades: 'Actividades' }
 
 /** Fila de lista que lleva a otra pantalla de la barra lateral. */
 function LinkRow({ icon, label, detail, onClick }: { icon: IconName; label: string; detail?: string; onClick: () => void }) {
@@ -44,6 +45,7 @@ export default function Sidebar() {
   if (selection?.kind === 'product') body = <ProductCard id={selection.id} />
   else if (route === 'simulador') body = <Simulator />
   else if (route === 'juego') body = <GamePanel />
+  else if (route === 'actividades') body = <Activities />
   else if (route === 'calculadora') body = <Calculator />
   else if (view === 'mapa') body = <Deliveries />
   else
@@ -55,6 +57,7 @@ export default function Sidebar() {
           <SectionTitle>Explorar</SectionTitle>
           <div className="inset-list">
             <LinkRow icon="juego" label="Modo juego" detail={game ? `${game.group} · semana ${Math.min(16, game.history.length + 1)}` : 'Semana a semana, con competencia entre grupos'} onClick={() => setRoute('juego')} />
+            <LinkRow icon="check" label="Actividades" detail="Predecir, simular y discutir" onClick={() => setRoute('actividades')} />
             <LinkRow icon="ajustes" label="Simulador" detail="Políticas, operación y escenario" onClick={() => setRoute('simulador')} />
             <LinkRow icon="tarea" label="Calculadora del curso" detail="EOQ, revisión continua y periódica, can-order" onClick={() => setRoute('calculadora')} />
           </div>

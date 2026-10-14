@@ -85,6 +85,8 @@ interface State {
   /** Cambia decisiones o escenario y vuelve a simular el año. */
   apply: (decisions: Decisions, scenario?: Scenario) => void
   setBase: () => void
+  /** Corre una actividad: la operación base y la variante, y deja la comparación armada en el simulador. */
+  runActivity: (base: [Decisions, Scenario], alt: [Decisions, Scenario]) => void
   startGame: (group: string, seed: number) => void
   playGameWeek: (decisions: Decisions) => void
   quitGame: () => void
@@ -133,6 +135,14 @@ export const useStore = create<State>((set, get) => ({
     set({ decisions, scenario, running: true })
     // Se deja pintar el aviso de "simulando" antes de bloquear el hilo.
     setTimeout(() => set({ run: simulate(scenario, decisions), running: false, selection: null }), 30)
+  },
+  runActivity: ([bd, bs], [ad, as]) => {
+    set({ running: true })
+    setTimeout(() => {
+      const base = simulate(bs, bd)
+      const run = simulate(as, ad)
+      set({ base: { decisions: bd, scenario: bs, summary: base.summary }, run, decisions: ad, scenario: as, running: false, selection: null, t: 10 })
+    }, 30)
   },
   startGame: (group, seed) => {
     set({ game: newGame(group, seed), freeRun: get().freeRun ?? get().run })

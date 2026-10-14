@@ -99,9 +99,13 @@ Además:
 
 ## Avance
 
-- H0 y H1 listos: motor con pruebas (`src/sim/engine.test.ts`).
-- H2 en curso: nave en 3D con estanterías, pallets según el stock de cada día, ubicaciones por rotación,
-  andenes con camiones y pallets en la playa, autoelevadores, oficinas, patio y Ruta 5.
+- H0 a H5 listos: motor, nave 3D, mapa de entregas, modo juego, simulador, calculadora, actividades y guía docente
+  (`docs/guia-docente.md`).
+- Los modelos de inventario siguen las unidades del curso (EOQ, revisión continua, revisión periódica y can-order,
+  con los cuatro criterios para k). Las pruebas reproducen los ejemplos de los apuntes (`src/sim/course.test.ts`).
+- Las distancias a los clientes salen de la red vial real (`pnpm geo`).
+- Pendiente: validar costos y productividades con alguien del rubro; probar en el aula con la pantalla táctil;
+  publicar en GitHub Pages (hay que activarlo en el repositorio).
 
 ## Hitos
 
