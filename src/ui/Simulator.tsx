@@ -80,30 +80,19 @@ function PolicyEditor({ policy, onChange }: { policy: Policy; onChange: (p: Poli
 
 const pct = (v: number) => `${Math.round(v)} %`
 
-/**
- * Modo simulador: se cambian las políticas, la operación, el transporte o el escenario, se simula el año y se compara
- * contra la base guardada.
- */
-export default function Simulator() {
-  const stored = useStore((s) => s.decisions)
-  const storedScenario = useStore((s) => s.scenario)
-  const running = useStore((s) => s.running)
-  const { apply, setBase, restoreBase } = useStore.getState()
-  const [dec, setDec] = useState<Decisions>(stored)
-  const [sc, setSc] = useState<Scenario>(storedScenario)
+/** Decisiones del centro logístico: política por clase, operación de la nave y transporte. */
+export function DecisionsEditor({ dec, onChange, reference }: { dec: Decisions; onChange: (d: Decisions) => void; reference: Decisions }) {
   const [cls, setCls] = useState<AbcClass>('A')
-  const dirty = JSON.stringify(dec) !== JSON.stringify(stored) || JSON.stringify(sc) !== JSON.stringify(storedScenario)
-  const freqShift = (dir: number) => setDec({ ...dec, frequency: stored.frequency.map((f) => ([1, 2, 3, 5] as const)[Math.min(3, Math.max(0, [1, 2, 3, 5].indexOf(f) + dir))]) })
-  const tariff = (k: keyof Scenario['tariffs'], v: number | boolean) => setSc({ ...sc, tariffs: { ...sc.tariffs, [k]: v } })
-
+  const freqShift = (dir: number) => onChange({ ...dec, frequency: reference.frequency.map((f) => ([1, 2, 3, 5] as const)[Math.min(3, Math.max(0, [1, 2, 3, 5].indexOf(f) + dir))]) })
+  const freqValue = JSON.stringify(dec.frequency) === JSON.stringify(reference.frequency) ? 0 : dec.frequency[3] < reference.frequency[3] ? -1 : 1
   return (
-    <div className="space-y-5">
+    <>
       <div>
         <SectionTitle>Política de inventario por clase</SectionTitle>
         <div className="mb-2">
           <Segmented items={['A', 'B', 'C'] as AbcClass[]} value={cls} onChange={setCls} label={(c) => `Clase ${c}`} />
         </div>
-        <PolicyEditor policy={dec.policy[cls]} onChange={(p) => setDec({ ...dec, policy: { ...dec.policy, [cls]: p } })} />
+        <PolicyEditor policy={dec.policy[cls]} onChange={(p) => onChange({ ...dec, policy: { ...dec.policy, [cls]: p } })} />
       </div>
 
       <div>
@@ -111,17 +100,17 @@ export default function Simulator() {
         <div className="inset-list">
           <Row label="Turnos" detail={dec.shifts === 1 ? '6 a 14 h' : dec.shifts === 2 ? '6 a 22 h' : 'las 24 h'}>
             <div className="w-[120px]">
-              <Segmented items={[1, 2, 3] as const} value={dec.shifts} onChange={(shifts) => setDec({ ...dec, shifts })} label={String} size="sm" />
+              <Segmented items={[1, 2, 3] as const} value={dec.shifts} onChange={(shifts) => onChange({ ...dec, shifts })} label={String} size="sm" />
             </div>
           </Row>
           <Row label="Operarios por turno">
-            <Stepper label="operarios" value={dec.operatorsPerShift} min={2} max={40} onChange={(operatorsPerShift) => setDec({ ...dec, operatorsPerShift })} />
+            <Stepper label="operarios" value={dec.operatorsPerShift} min={2} max={40} onChange={(operatorsPerShift) => onChange({ ...dec, operatorsPerShift })} />
           </Row>
           <Row label="Autoelevadores">
-            <Stepper label="autoelevadores" value={dec.forklifts} min={1} max={16} onChange={(forklifts) => setDec({ ...dec, forklifts })} />
+            <Stepper label="autoelevadores" value={dec.forklifts} min={1} max={16} onChange={(forklifts) => onChange({ ...dec, forklifts })} />
           </Row>
           <Row label="Horas extra" detail="Hasta 2 h por operario, al doble">
-            <Toggle on={dec.overtime} onChange={(overtime) => setDec({ ...dec, overtime })} label="Horas extra" />
+            <Toggle on={dec.overtime} onChange={(overtime) => onChange({ ...dec, overtime })} label="Horas extra" />
           </Row>
         </div>
       </div>
@@ -130,14 +119,36 @@ export default function Simulator() {
         <SectionTitle>Transporte</SectionTitle>
         <div className="inset-list">
           <Row label="Camiones propios" detail="El resto va con fletes">
-            <Stepper label="camiones propios" value={dec.ownTrucks} min={0} max={30} onChange={(ownTrucks) => setDec({ ...dec, ownTrucks })} />
+            <Stepper label="camiones propios" value={dec.ownTrucks} min={0} max={30} onChange={(ownTrucks) => onChange({ ...dec, ownTrucks })} />
           </Row>
           <div className="space-y-2 px-3 py-2.5">
             <span className="text-[15px]">Frecuencia de entrega</span>
-            <Segmented items={[-1, 0, 1] as const} value={JSON.stringify(dec.frequency) === JSON.stringify(stored.frequency) ? 0 : dec.frequency[3] < stored.frequency[3] ? -1 : 1} onChange={freqShift} label={(v) => (v < 0 ? 'Menos seguido' : v > 0 ? 'Más seguido' : 'Actual')} size="sm" />
+            <Segmented items={[-1, 0, 1] as const} value={freqValue} onChange={freqShift} label={(v) => (v < 0 ? 'Menos seguido' : v > 0 ? 'Más seguido' : 'Actual')} size="sm" />
           </div>
         </div>
       </div>
+    </>
+  )
+}
+
+/**
+ * Modo simulador: se cambian las políticas, la operación, el transporte o el escenario, se simula el año y se compara
+ * contra la base guardada.
+ */
+export default function Simulator() {
+  const stored = useStore((s) => s.decisions)
+  const storedScenario = useStore((s) => s.scenario)
+  const running = useStore((s) => s.running)
+  const inGame = useStore((s) => s.game !== null)
+  const { apply, setBase, restoreBase } = useStore.getState()
+  const [dec, setDec] = useState<Decisions>(stored)
+  const [sc, setSc] = useState<Scenario>(storedScenario)
+  const dirty = JSON.stringify(dec) !== JSON.stringify(stored) || JSON.stringify(sc) !== JSON.stringify(storedScenario)
+  const tariff = (k: keyof Scenario['tariffs'], v: number | boolean) => setSc({ ...sc, tariffs: { ...sc.tariffs, [k]: v } })
+
+  return (
+    <div className="space-y-5">
+      <DecisionsEditor dec={dec} onChange={setDec} reference={stored} />
 
       <div>
         <SectionTitle>Escenario</SectionTitle>
@@ -184,13 +195,14 @@ export default function Simulator() {
 
       <div className="flex gap-2">
         <button
-          disabled={!dirty || running}
+          disabled={!dirty || running || inGame}
           onClick={() => apply(dec, sc)}
           className="h-11 flex-1 rounded-[12px] bg-[var(--accent)] text-[15px] font-semibold text-white disabled:opacity-40"
         >
           {running ? 'Simulando…' : 'Simular el año'}
         </button>
       </div>
+      {inGame && <p className="px-1 text-[12.5px] leading-snug text-[var(--alert)]">Hay una partida del modo juego en curso: cerrala para volver a simular el año.</p>}
       <div className="flex gap-2">
         <button disabled={dirty || running} onClick={setBase} className="h-9 flex-1 rounded-[10px] bg-[var(--fill)] text-[14px] font-semibold text-[var(--accent)] disabled:opacity-40">
           Fijar como base

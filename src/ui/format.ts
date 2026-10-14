@@ -9,8 +9,8 @@ export function dateOf(day: number, startDayOfYear = BASE_SCENARIO.startDayOfYea
   return { weekday: WEEKDAYS[day % 7], day: d.getUTCDate(), month: MONTHS[d.getUTCMonth()] }
 }
 
-export function dateLabel(day: number) {
-  const d = dateOf(day)
+export function dateLabel(day: number, startDayOfYear?: number) {
+  const d = dateOf(day, startDayOfYear)
   return `${d.weekday} ${d.day} ${d.month}`
 }
 

@@ -1,4 +1,4 @@
-import { HORIZON_DAYS, dayOf, useStore } from '../store'
+import { dayOf, useStore } from '../store'
 import { dateLabel, hhmm } from './format'
 
 const SPEEDS = [1, 4, 24]
@@ -6,7 +6,8 @@ const SPEEDS = [1, 4, 24]
 /** Reproductor flotante: reproducir o pausar, hora simulada, línea de tiempo y velocidad. */
 export default function Player() {
   const t = useStore((s) => s.t)
-  const days = HORIZON_DAYS
+  const days = useStore((s) => s.run.days.length)
+  const start = useStore((s) => s.scenario.startDayOfYear)
   const playing = useStore((s) => s.playing)
   const speed = useStore((s) => s.speed)
   const { setT, togglePlay, setSpeed } = useStore.getState()
@@ -34,9 +35,9 @@ export default function Player() {
       </button>
       <div className="flex w-[118px] shrink-0 flex-col leading-tight">
         <span className="text-[15px] font-semibold tabular-nums">
-          {dateLabel(day)}, {hhmm(t)}
+          {dateLabel(day, start)}, {hhmm(t)}
         </span>
-        <span className="text-[12px] text-[var(--ink-2)]">semana {Math.floor(day / 7) + 1} de {days / 7}</span>
+        <span className="text-[12px] text-[var(--ink-2)]">semana {Math.floor(day / 7) + 1} de {Math.ceil(days / 7)}</span>
       </div>
       <input
         id="tiempo"

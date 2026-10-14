@@ -5,12 +5,13 @@ import { SectionTitle } from './controls'
 import { Icon, type IconName } from './icons'
 import Simulator from './Simulator'
 import Deliveries from './Deliveries'
+import GamePanel from './Game'
 import Legend from './Legend'
 import ProductCard from './ProductCard'
 import Today from './Today'
 
-type Route = 'inicio' | 'simulador' | 'calculadora'
-const TITLES: Record<Exclude<Route, 'inicio'>, string> = { simulador: 'Simulador', calculadora: 'Calculadora del curso' }
+type Route = 'inicio' | 'simulador' | 'calculadora' | 'juego'
+const TITLES: Record<Exclude<Route, 'inicio'>, string> = { simulador: 'Simulador', calculadora: 'Calculadora del curso', juego: 'Modo juego' }
 
 /** Fila de lista que lleva a otra pantalla de la barra lateral. */
 function LinkRow({ icon, label, detail, onClick }: { icon: IconName; label: string; detail?: string; onClick: () => void }) {
@@ -28,17 +29,6 @@ function LinkRow({ icon, label, detail, onClick }: { icon: IconName; label: stri
   )
 }
 
-/** Fila de lista para lo que todavía no está (se muestra, pero sin entrar). */
-function SoonRow({ icon, label, detail }: { icon: IconName; label: string; detail: string }) {
-  return (
-    <div className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-[15px] text-[var(--ink-3)]">
-      <Icon name={icon} size={20} />
-      <span className="flex-1">{label}</span>
-      <span className="text-[13px]">{detail}</span>
-    </div>
-  )
-}
-
 /**
  * Barra lateral: el centro logístico, los indicadores del día y la mercadería. Lo que se toca en la escena (un pallet)
  * muestra su ficha acá mismo.
@@ -48,10 +38,12 @@ export default function Sidebar() {
   const [route, setRoute] = useState<Route>('inicio')
   const selection = useStore((s) => s.selection)
   const view = useStore((s) => s.view)
+  const game = useStore((s) => s.game)
 
   let body: ReactNode
   if (selection?.kind === 'product') body = <ProductCard id={selection.id} />
   else if (route === 'simulador') body = <Simulator />
+  else if (route === 'juego') body = <GamePanel />
   else if (route === 'calculadora') body = <Calculator />
   else if (view === 'mapa') body = <Deliveries />
   else
@@ -62,7 +54,7 @@ export default function Sidebar() {
         <div>
           <SectionTitle>Explorar</SectionTitle>
           <div className="inset-list">
-            <SoonRow icon="juego" label="Modo juego" detail="Próximamente" />
+            <LinkRow icon="juego" label="Modo juego" detail={game ? `${game.group} · semana ${Math.min(16, game.history.length + 1)}` : 'Semana a semana, con competencia entre grupos'} onClick={() => setRoute('juego')} />
             <LinkRow icon="ajustes" label="Simulador" detail="Políticas, operación y escenario" onClick={() => setRoute('simulador')} />
             <LinkRow icon="tarea" label="Calculadora del curso" detail="EOQ, revisión continua y periódica, can-order" onClick={() => setRoute('calculadora')} />
           </div>
@@ -101,7 +93,7 @@ export default function Sidebar() {
       </header>
       {!collapsed && (
         <>
-          <div key={`${route}-${selection?.kind ?? ""}-${view === "mapa"}`} className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+          <div key={`${route}-${selection?.kind ?? ""}-${view === "mapa"}-${game?.history.length ?? -1}`} className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {body}
           </div>
           {home && <p className="px-5 pb-4 text-[11px] leading-snug text-[var(--ink-3)]">Nave, catálogo, demanda y costos simulados. Los costos son estimados (USD).</p>}

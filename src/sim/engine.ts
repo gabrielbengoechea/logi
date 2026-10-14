@@ -1,4 +1,4 @@
-import { FAMILIES, familyOf, generateCatalog, seasonFactor, suppliersOf, type AbcClass, type Product, type Supplier } from './catalog'
+import { FAMILIES, familyOf, generateCatalog, seasonFactor, suppliersOf, type AbcClass, type FamilyKey, type Product, type Supplier } from './catalog'
 import { G, eoq, kFor, sigmaC, type Criterion } from './course'
 import { CLIENTS, CLIENT_SHARE, defaultFrequency, summerFactor } from './clients'
 import { gammaMean1, hashUniform, mulberry32, poissonFrom } from './rng'
@@ -82,6 +82,10 @@ export interface Scenario {
   importDelay: number
   /** Multiplicador del precio del gasoil. */
   fuel: number
+  /** Demanda extra por familia (promociones, olas de calor). 1 = normal. */
+  familyBoost?: Partial<Record<FamilyKey, number>>
+  /** Parte del personal que viene a trabajar (ausentismo). 1 = todos. */
+  staffFactor?: number
   areaM2: number
   positions: number
   docks: number
@@ -295,7 +299,8 @@ export const totalCost = (c: Costs) => Object.values(c).reduce((s, v) => s + v, 
  * semana) o correr un período entero (modo simulador).
  */
 export class Simulation {
-  readonly scenario: Scenario
+  /** Se puede cambiar entre un día y otro (eventos del modo juego). */
+  scenario: Scenario
   readonly products: Product[]
   readonly days: DayStats[] = []
   decisions: Decisions
@@ -379,7 +384,7 @@ export class Simulation {
   private expectedTotal(sku: number, day: number) {
     const p = this.products[sku]
     const season = this.scenario.seasonality ? seasonFactor(familyOf(p.family), this.dayOfYear(day)) : 1
-    return p.dailyDemand * this.scenario.demandFactor * season
+    return p.dailyDemand * this.scenario.demandFactor * season * (this.scenario.familyBoost?.[p.family] ?? 1)
   }
 
   /** Sorteo de Poisson fijo para la semilla, el día, el cliente y el producto. */
@@ -542,7 +547,7 @@ export class Simulation {
     let liftHours = 0
     let overtimeLeft = 0
     if (open) {
-      hours = dec.operatorsPerShift * dec.shifts * P.shiftHours
+      hours = dec.operatorsPerShift * dec.shifts * P.shiftHours * (sc.staffFactor ?? 1)
       liftHours = dec.forklifts * dec.shifts * P.shiftHours
       overtimeLeft = dec.overtime ? dec.operatorsPerShift * P.overtimeHours : 0
     }

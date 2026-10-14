@@ -173,7 +173,7 @@ export default function Docks() {
           const row = Math.floor(i / 2)
           m.makeTranslation(DOCKS[v.dock].x + (col ? 1.05 : -1.05), 0, STAGING.z1 - 3.2 - row * 1.3)
           sm.setMatrixAt(n, m)
-          sm.setColorAt(n, c.set(FAMILIES[(v.dock * 7 + i * 3 + v.client) % FAMILIES.length].color))
+          sm.setColorAt(n, c.set(FAMILIES[(v.dock * 7 + i * 3 + Math.max(0, v.client)) % FAMILIES.length].color))
         }
       }
       sm.count = n
