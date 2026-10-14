@@ -3,7 +3,8 @@ import * as THREE from 'three'
 import { DOCKS, HALL, RACK, STAGING, aisleX, faceX } from '../sim/warehouse'
 import { useStore } from '../store'
 import { registerGlow } from './environment'
-import { Instances } from './Instances'
+import { Instances, type Box } from './Instances'
+import { glassColor, ribColor, ribNormal, roofColor, signTexture } from './textures'
 
 const HL = HALL.length / 2
 const HW = HALL.width / 2
@@ -102,7 +103,7 @@ function wallTexture(inside: boolean) {
   c.width = 256
   c.height = 256
   const g = c.getContext('2d')!
-  g.fillStyle = inside ? '#eef0f2' : '#dfe3e7'
+  g.fillStyle = inside ? '#f6f7f8' : '#dfe3e7'
   g.fillRect(0, 0, 256, 256)
   for (let x = 0; x < 256; x += 32) {
     g.fillStyle = inside ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.09)'
@@ -121,12 +122,12 @@ function wallGeometry(length: number, height: number, holes: { x: number; w: num
   const shape = new THREE.Shape([new THREE.Vector2(-length / 2, 0), new THREE.Vector2(length / 2, 0), new THREE.Vector2(length / 2, height), new THREE.Vector2(-length / 2, height)])
   for (const h of holes) shape.holes.push(new THREE.Path([new THREE.Vector2(h.x - h.w / 2, 0.001), new THREE.Vector2(h.x - h.w / 2, h.h), new THREE.Vector2(h.x + h.w / 2, h.h), new THREE.Vector2(h.x + h.w / 2, 0.001)]))
   const g = new THREE.ShapeGeometry(shape)
-  // UV en metros, para repetir la textura de paneles cada 4 m.
+  // UV en metros: las texturas de chapa repiten cada metro.
   const pos = g.attributes.position as THREE.BufferAttribute
   const uv = new Float32Array(pos.count * 2)
   for (let i = 0; i < pos.count; i++) {
-    uv[i * 2] = pos.getX(i) / 4
-    uv[i * 2 + 1] = pos.getY(i) / 4
+    uv[i * 2] = pos.getX(i)
+    uv[i * 2 + 1] = pos.getY(i)
   }
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
   return g
@@ -134,22 +135,23 @@ function wallGeometry(length: number, height: number, holes: { x: number; w: num
 
 /**
  * Paredes en corte: cada pared se dibuja mirando hacia adentro, así la que queda entre la cámara y la nave no se ve
- * y se puede mirar el interior desde cualquier lado. En la vista exterior las paredes se ven de los dos lados.
+ * y se puede mirar el interior desde cualquier lado. En la vista exterior se suma la cara de afuera (chapa nervada).
  */
 function Walls({ outside }: { outside: boolean }) {
-  const [inner, outer] = useMemo(() => [wallTexture(true), wallTexture(false)], [])
-  const material = useMemo(() => new THREE.MeshStandardMaterial({ map: inner, roughness: 0.85 }), [inner])
-  const outerMaterial = useMemo(() => new THREE.MeshStandardMaterial({ map: outer, roughness: 0.8, side: THREE.BackSide }), [outer])
-  const dockHoles = DOCKS.map((d) => ({ x: -d.x, w: DOOR.w, h: DOOR.h }))
+  const material = useMemo(() => {
+    const t = wallTexture(true)
+    t.repeat.set(0.25, 0.25)
+    return new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 })
+  }, [])
+  const outerMaterial = useMemo(() => new THREE.MeshStandardMaterial({ map: ribColor('#eceff1'), normalMap: ribNormal(), roughness: 0.6, metalness: 0.1, side: THREE.BackSide }), [])
   const walls = useMemo(
     () => [
-      // [geometría, posición, giro]: el giro deja la cara de adelante mirando al interior.
-      { g: wallGeometry(HALL.length, HALL.height, dockHoles), p: [0, 0, HW] as const, r: Math.PI },
+      // Posición y giro: el giro deja la cara de adelante mirando al interior.
+      { g: wallGeometry(HALL.length, HALL.height, DOCKS.map((d) => ({ x: -d.x, w: DOOR.w, h: DOOR.h }))), p: [0, 0, HW] as const, r: Math.PI },
       { g: wallGeometry(HALL.length, HALL.height), p: [0, 0, -HW] as const, r: 0 },
       { g: wallGeometry(HALL.width, HALL.height), p: [-HL, 0, 0] as const, r: Math.PI / 2 },
       { g: wallGeometry(HALL.width, HALL.height), p: [HL, 0, 0] as const, r: -Math.PI / 2 },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   )
   return (
@@ -157,54 +159,143 @@ function Walls({ outside }: { outside: boolean }) {
       {walls.map((w, i) => (
         <group key={i} position={w.p as unknown as THREE.Vector3Tuple} rotation-y={w.r}>
           <mesh geometry={w.g} material={material} receiveShadow />
-          {outside && <mesh geometry={w.g} material={outerMaterial} castShadow />}
+          {outside && <mesh geometry={w.g} material={outerMaterial} castShadow receiveShadow />}
         </group>
       ))}
-      {/* Franja azul arriba, por fuera. */}
-      {outside && (
-        <mesh position={[0, HALL.height - 0.9, HW + 0.06]}>
-          <boxGeometry args={[HALL.length + 0.2, 1.4, 0.05]} />
-          <meshStandardMaterial color="#1f3557" roughness={0.6} />
-        </mesh>
-      )}
     </group>
   )
 }
 
-/** Pórticos de acero cada 8 m, correas y luminarias. El techo de chapa solo se ve en la vista exterior. */
-function Roof({ outside }: { outside: boolean }) {
-  const steel = useMemo(() => new THREE.MeshStandardMaterial({ color: '#8d969f', roughness: 0.5, metalness: 0.5 }), [])
+/** Cuatro cajas finas pegadas a las paredes por fuera, a una altura dada (zócalo, franjas, alero). */
+function ring(y: number, h: number, out: number, t = 0.12): Box[] {
+  return [
+    { p: [0, y + h / 2, HW + out], s: [HALL.length + 2 * out + t, h, t] },
+    { p: [0, y + h / 2, -HW - out], s: [HALL.length + 2 * out + t, h, t] },
+    { p: [-HL - out, y + h / 2, 0], s: [t, h, HALL.width + 2 * out] },
+    { p: [HL + out, y + h / 2, 0], s: [t, h, HALL.width + 2 * out] },
+  ]
+}
+
+/**
+ * Lo que se ve desde afuera: zócalo de hormigón, franja de policarbonato, banda azul con el cartel, techo de chapa con
+ * lucernarios y equipos, y el alero de los andenes.
+ */
+function Exterior() {
+  const concrete = useMemo(() => new THREE.MeshStandardMaterial({ color: '#b9bcbe', roughness: 0.9 }), [])
+  const navy = useMemo(() => new THREE.MeshStandardMaterial({ color: '#1f3557', roughness: 0.5, metalness: 0.3 }), [])
+  const orange = useMemo(() => new THREE.MeshStandardMaterial({ color: '#e8702a', roughness: 0.5 }), [])
+  const poly = useMemo(() => new THREE.MeshStandardMaterial({ color: '#eef4f7', roughness: 0.3, transparent: true, opacity: 0.88, emissive: '#ffffff', emissiveIntensity: 0.08 }), [])
+  const steel = useMemo(() => new THREE.MeshStandardMaterial({ color: '#9aa3ab', roughness: 0.45, metalness: 0.6 }), [])
+  const roof = useMemo(() => {
+    const t = roofColor().clone()
+    t.needsUpdate = true
+    t.repeat.set(HALL.length / 6, 1)
+    return new THREE.MeshStandardMaterial({ map: t, roughness: 0.5, metalness: 0.35 })
+  }, [])
+  const sign = useMemo(() => new THREE.MeshStandardMaterial({ map: signTexture('CENTRO LOGÍSTICO RUTA 5'), roughness: 0.5 }), [])
+  const [plinth, strip, fascia, line] = useMemo(() => [ring(0, 1, 0.08, 0.16), ring(9.2, 1.2, 0.07), ring(HALL.height, 1.7, 0.08, 0.2), ring(12.75, 0.18, 0.1)], [])
+  const [skylights, units, canopy] = useMemo(() => {
+    const skylights: Box[] = []
+    for (let x = -HL + 8; x < HL - 4; x += 8) skylights.push({ p: [x, HALL.height + 1.55, 0], s: [1.6, 0.12, HALL.width - 12] })
+    const units: Box[] = []
+    for (let i = 0; i < 4; i++) units.push({ p: [-HL + 10 + i * 6, HALL.height + 2.1, -HW + 8], s: [3.2, 1.4, 2.2] })
+    const canopy: Box[] = [{ p: [0, 5.4, HW + 2.6], s: [104, 0.35, 5.2] }]
+    for (let x = -50; x <= 50; x += 10) canopy.push({ p: [x, 7.2, HW + 1.3], s: [0.12, 0.12, 3.3] })
+    return [skylights, units, canopy]
+  }, [])
+  return (
+    <group>
+      <Instances boxes={plinth} material={concrete} castShadow />
+      <Instances boxes={strip} material={poly} />
+      <Instances boxes={fascia} material={navy} castShadow />
+      <Instances boxes={line} material={orange} />
+      <mesh position={[0, HALL.height + 1.42, 0]} rotation-x={-Math.PI / 2} material={roof} receiveShadow>
+        <planeGeometry args={[HALL.length + 0.2, HALL.width + 0.2]} />
+      </mesh>
+      <Instances boxes={skylights} material={poly} />
+      <Instances boxes={units} material={steel} castShadow />
+      <Instances boxes={canopy} material={steel} castShadow />
+      {/* Cartel sobre los andenes y sobre la entrada de las oficinas. */}
+      <mesh position={[-20, HALL.height + 0.85, HW + 0.2]} material={sign}>
+        <planeGeometry args={[26, 1.62]} />
+      </mesh>
+      <mesh position={[-HL - 0.21, HALL.height + 0.85, -6]} rotation-y={-Math.PI / 2} material={sign}>
+        <planeGeometry args={[26, 1.62]} />
+      </mesh>
+    </group>
+  )
+}
+
+/** Bloque de oficinas de dos pisos, pegado a la pared oeste, con muro cortina y alero de entrada. */
+function OfficeBlock() {
+  const glass = useMemo(() => {
+    const t = glassColor().clone()
+    t.needsUpdate = true
+    t.repeat.set(1 / 1.5, 1 / 4)
+    return new THREE.MeshStandardMaterial({ map: t, roughness: 0.08, metalness: 0.65, envMapIntensity: 1.4 })
+  }, [])
+  const white = useMemo(() => new THREE.MeshStandardMaterial({ color: '#f2f3f4', roughness: 0.7 }), [])
+  const navy = useMemo(() => new THREE.MeshStandardMaterial({ color: '#1f3557', roughness: 0.5 }), [])
+  const W = 11
+  const D = 26
+  const H = 8.6
+  const x0 = -HL - W / 2
+  // Caja de vidrio con UV en metros para que los montantes queden cada 1,5 m.
+  const geo = useMemo(() => {
+    const g = new THREE.BoxGeometry(W, H, D)
+    const pos = g.attributes.position as THREE.BufferAttribute
+    const nor = g.attributes.normal as THREE.BufferAttribute
+    const uv = g.attributes.uv as THREE.BufferAttribute
+    for (let i = 0; i < pos.count; i++) {
+      const horizontal = Math.abs(nor.getX(i)) > 0.5 ? pos.getZ(i) : pos.getX(i)
+      uv.setXY(i, horizontal + 20, pos.getY(i) + H / 2)
+    }
+    return g
+  }, [])
+  return (
+    <group position={[x0, 0, -27]}>
+      <mesh geometry={geo} material={glass} position={[0, H / 2 - HALL.dockHeight, 0]} castShadow receiveShadow />
+      <mesh material={white} position={[0, H - HALL.dockHeight + 0.35, 0]} castShadow>
+        <boxGeometry args={[W + 0.6, 0.7, D + 0.6]} />
+      </mesh>
+      <mesh material={navy} position={[0, 3.2 - HALL.dockHeight, D / 2 + 0.05]}>
+        <boxGeometry args={[W + 0.6, 0.35, 0.1]} />
+      </mesh>
+      {/* Alero y entrada. */}
+      <mesh material={white} position={[-W / 2 - 2, 3.3 - HALL.dockHeight, 0]} castShadow>
+        <boxGeometry args={[4, 0.25, 7]} />
+      </mesh>
+      <mesh material={navy} position={[-W / 2 - 0.02, 1.2 - HALL.dockHeight, 0]}>
+        <boxGeometry args={[0.05, 2.4, 2.4]} />
+      </mesh>
+    </group>
+  )
+}
+
+/** Pórticos de acero cada 8 m y luminarias. */
+function Roof() {
+  const steel = useMemo(() => new THREE.MeshStandardMaterial({ color: '#c3cad1', roughness: 0.5, metalness: 0.4 }), [])
   const frames = useMemo(() => {
-    const boxes: { p: [number, number, number]; s: [number, number, number] }[] = []
+    const boxes: Box[] = []
     for (let x = -HL + 4; x <= HL - 3; x += 8) {
-      // Viga reticulada (cordón superior e inferior) y pilares en las paredes.
-      boxes.push({ p: [x, HALL.height + 0.9, 0], s: [0.25, 0.25, HALL.width] })
-      boxes.push({ p: [x, HALL.height - 0.1, 0], s: [0.2, 0.2, HALL.width] })
-      for (let z = -HW + 2; z < HW; z += 4) boxes.push({ p: [x, HALL.height + 0.4, z], s: [0.08, 1, 0.08] })
+      // Viga del pórtico y pilares en las paredes.
+      boxes.push({ p: [x, HALL.height + 0.5, 0], s: [0.22, 0.9, HALL.width] })
       for (const z of [-HW + 0.3, HW - 0.3]) boxes.push({ p: [x, HALL.height / 2, z], s: [0.4, HALL.height, 0.4] })
     }
-    for (let z = -HW + 4; z < HW; z += 4) boxes.push({ p: [0, HALL.height + 1.1, z], s: [HALL.length, 0.15, 0.1] })
     return boxes
   }, [])
   const lamps = useMemo(() => {
-    const out: { p: [number, number, number]; s: [number, number, number] }[] = []
+    const out: Box[] = []
     for (let d = -1; d < RACK.doubles; d++) for (let z = 18; z > -36; z -= 9) out.push({ p: [aisleX(d), 11.6, z], s: [0.5, 0.12, 1.4] })
     for (const d of DOCKS) out.push({ p: [d.x, 11.6, 31], s: [0.5, 0.12, 1.4] })
     return out
   }, [])
   const lampMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#fff6e0', emissiveIntensity: 0.6 }), [])
   useEffect(() => registerGlow(lampMaterial, 0.6, 3), [lampMaterial])
-  const roofMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: '#c4cad0', roughness: 0.6, metalness: 0.3 }), [])
-
   return (
     <group>
       <Instances boxes={frames} material={steel} castShadow />
       <Instances boxes={lamps} material={lampMaterial} />
-      {outside && (
-        <mesh material={roofMaterial} position={[0, HALL.height + 1.3, 0]} castShadow receiveShadow>
-          <boxGeometry args={[HALL.length + 1, 0.2, HALL.width + 1]} />
-        </mesh>
-      )}
     </group>
   )
 }
@@ -215,16 +306,26 @@ function DockDoors() {
     <group>
       {DOCKS.map((d, i) => (
         <group key={i} position={[d.x, 0, HW]}>
-          {/* Marco y burletes por fuera. */}
-          <mesh position={[0, DOOR.h + 0.25, 0.35]} castShadow>
-            <boxGeometry args={[DOOR.w + 1, 0.5, 0.7]} />
-            <meshStandardMaterial color="#1d1f22" roughness={0.9} />
+          {/* Abrigo de lona por fuera, con franjas guía amarillas, y topes de goma abajo. */}
+          <mesh position={[0, DOOR.h + 0.3, 0.45]} castShadow>
+            <boxGeometry args={[DOOR.w + 1.2, 0.6, 0.9]} />
+            <meshStandardMaterial color="#33373c" roughness={0.95} />
           </mesh>
           {[-1, 1].map((s) => (
-            <mesh key={s} position={[(s * (DOOR.w + 0.5)) / 2, DOOR.h / 2, 0.35]} castShadow>
-              <boxGeometry args={[0.5, DOOR.h, 0.7]} />
-              <meshStandardMaterial color="#1d1f22" roughness={0.9} />
-            </mesh>
+            <group key={s}>
+              <mesh position={[(s * (DOOR.w + 0.6)) / 2, DOOR.h / 2, 0.45]} castShadow>
+                <boxGeometry args={[0.6, DOOR.h, 0.9]} />
+                <meshStandardMaterial color="#33373c" roughness={0.95} />
+              </mesh>
+              <mesh position={[(s * (DOOR.w + 0.6)) / 2, DOOR.h / 2, 0.91]}>
+                <boxGeometry args={[0.12, DOOR.h - 0.2, 0.02]} />
+                <meshStandardMaterial color="#f2c12e" roughness={0.6} />
+              </mesh>
+              <mesh position={[s * 1.2, -0.45, 0.2]}>
+                <boxGeometry args={[0.35, 0.5, 0.3]} />
+                <meshStandardMaterial color="#15171a" roughness={0.9} />
+              </mesh>
+            </group>
           ))}
           {/* Persiana enrollada arriba y niveladora en el piso. */}
           <mesh position={[0, DOOR.h - 0.25, -0.3]}>
@@ -286,7 +387,9 @@ export default function Building() {
         <meshStandardMaterial color="#9da3a8" roughness={0.9} />
       </mesh>
       <Walls outside={outside} />
-      <Roof outside={outside} />
+      <Roof />
+      {outside && <Exterior />}
+      <OfficeBlock />
       <DockDoors />
       <Offices />
       <Chargers />

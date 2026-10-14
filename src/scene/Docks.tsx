@@ -5,6 +5,7 @@ import { CLIENTS } from '../sim/clients'
 import type { DayStats, Decisions } from '../sim/engine'
 import { FAMILIES } from '../sim/catalog'
 import { DOCKS, HALL, PALLET, STAGING } from '../sim/warehouse'
+import { doorColor } from './textures'
 import { dayOf, useStore } from '../store'
 
 /** Un camión en un andén: cuándo llega, cuándo se va y qué lleva. */
@@ -113,6 +114,8 @@ export default function Docks() {
   const lights = useRef<THREE.Group>(null)
   const cache = useRef<{ day: number; visits: Visit[] }>({ day: -1, visits: [] })
   const lightMats = useMemo(() => DOCKS.map(() => new THREE.MeshStandardMaterial({ color: '#34c759', emissive: '#34c759', emissiveIntensity: 1.6 })), [])
+  const doors = useRef<THREE.Group>(null)
+  const doorMat = useMemo(() => new THREE.MeshStandardMaterial({ map: doorColor(), roughness: 0.5, metalness: 0.2, side: THREE.DoubleSide }), [])
   const staged = useRef<THREE.InstancedMesh>(null)
   const stagedGeo = useMemo(() => new THREE.BoxGeometry(PALLET.w - 0.05, 1.35, PALLET.d - 0.05).translate(0, 0.675 + PALLET.base, 0), [])
   const stagedMat = useMemo(() => new THREE.MeshStandardMaterial({ roughness: 0.45 }), [])
@@ -125,6 +128,7 @@ export default function Docks() {
     if (cache.current.day !== day) cache.current = { day, visits: dockSchedule(run.days[day], decisions) }
     const h = t - day * 24
     const busy = DOCKS.map(() => false)
+    const open = DOCKS.map(() => false)
     let used = 0
     let waiting = 0
     for (const v of cache.current.visits) {
@@ -142,6 +146,7 @@ export default function Docks() {
         truck.position.set(DOCKS[v.dock].x, 0, HW + 0.4 + approach * approach * 22)
       }
       if (h >= v.start && h <= v.end) busy[v.dock] = true
+      if (!waits) open[v.dock] = true
       const box = truck.getObjectByName('box') as THREE.Mesh
       const cab = truck.getObjectByName('cab') as THREE.Mesh
       const stripe = truck.getObjectByName('stripe') as THREE.Mesh
@@ -175,6 +180,8 @@ export default function Docks() {
       sm.instanceMatrix.needsUpdate = true
       if (sm.instanceColor) sm.instanceColor.needsUpdate = true
     }
+    // Portón: cerrado si no hay camión en el andén.
+    doors.current?.children.forEach((d, i) => (d.visible = !open[i]))
     busy.forEach((b, i) => {
       const m = lightMats[i]
       const c = b ? '#ff3b30' : '#34c759'
@@ -191,6 +198,13 @@ export default function Docks() {
         ))}
       </group>
       <instancedMesh ref={staged} args={[stagedGeo, stagedMat, STAGE_MAX]} castShadow receiveShadow frustumCulled={false} />
+      <group ref={doors}>
+        {DOCKS.map((d, i) => (
+          <mesh key={i} position={[d.x, 1.9, HW - 0.05]} material={doorMat}>
+            <planeGeometry args={[3.4, 3.8]} />
+          </mesh>
+        ))}
+      </group>
       <group ref={lights}>
         {DOCKS.map((d, i) => (
           <mesh key={i} position={[d.x + 2.3, 2.4, HW + 0.12]} material={lightMats[i]}>

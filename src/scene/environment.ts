@@ -55,9 +55,9 @@ export function dayLight(t: number, cycle: boolean, out?: DayLight): DayLight {
   r.night = 1 - smooth(-0.12, 0.06, s)
   r.dusk = (1 - smooth(0.05, 0.3, s)) * (1 - r.night)
   r.sunColor.copy(LOW_SUN).lerp(NOON_SUN, smooth(0.02, 0.4, s))
-  r.sunIntensity = 2.7 * smooth(-0.02, 0.22, s)
-  r.ambient = 0.22 + 0.9 * (1 - r.night)
-  r.envIntensity = 0.1 + 0.45 * (1 - r.night)
+  r.sunIntensity = 3.2 * smooth(-0.02, 0.22, s)
+  r.ambient = 0.22 + 0.55 * (1 - r.night)
+  r.envIntensity = 0.1 + 0.6 * (1 - r.night)
   r.fog.copy(DAY_FOG).lerp(DUSK_FOG, r.dusk * 0.8).lerp(NIGHT_FOG, r.night)
   return r
 }
