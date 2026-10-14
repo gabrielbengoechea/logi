@@ -1,6 +1,7 @@
 import { FAMILIES, familyOf, generateCatalog, seasonFactor, type AbcClass, type Product } from './catalog'
 import { CLIENTS, CLIENT_SHARE, defaultFrequency, summerFactor } from './clients'
 import { gammaMean1, hashUniform, mulberry32, poissonFrom } from './rng'
+import { DOCKS, HALL, POSITIONS } from './warehouse'
 
 /** Tarifas en USD. Valores estimados, con órdenes de magnitud verosímiles para Uruguay. */
 export interface Tariffs {
@@ -51,7 +52,7 @@ export const BASE_TARIFFS: Tariffs = {
 /** Lo que no controla el jugador: el mundo. */
 export interface Scenario {
   seed: number
-  /** Primer día de la simulación, como día del año (0 = 1 de enero). Siempre arranca un lunes. */
+  /** Primer día de la simulación, como día del año (0 = 1 de enero de 2027). Tiene que caer lunes. */
   startDayOfYear: number
   products: number
   /** Volumen base de la demanda, en pallets por día. */
@@ -75,7 +76,8 @@ export interface Scenario {
 
 export const BASE_SCENARIO: Scenario = {
   seed: 1,
-  startDayOfYear: 60,
+  // Lunes 1 de marzo de 2027.
+  startDayOfYear: 59,
   products: 240,
   palletsPerDay: 180,
   demandFactor: 1,
@@ -84,9 +86,9 @@ export const BASE_SCENARIO: Scenario = {
   shortage: 'lost',
   importDelay: 1,
   fuel: 1,
-  areaM2: 10_000,
-  positions: 6000,
-  docks: 10,
+  areaM2: HALL.length * HALL.width,
+  positions: POSITIONS,
+  docks: DOCKS.length,
   tariffs: BASE_TARIFFS,
 }
 

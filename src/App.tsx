@@ -1,8 +1,27 @@
-/** Pantalla provisoria hasta que esté la nave en 3D (H2). */
+import { Canvas } from '@react-three/fiber'
+import * as THREE from 'three'
+import Scene, { VIEWS } from './scene/Scene'
+import { useStore } from './store'
+import Hud from './ui/Hud'
+
+const [px, py, pz] = VIEWS.exterior
+const DPR = { alta: [1, 2], media: [1, 1.5], baja: [1, 1] } as const
+
 export default function App() {
+  const select = useStore((s) => s.select)
+  const quality = useStore((s) => s.quality)
   return (
-    <main className="flex h-full items-center justify-center bg-[#f2f2f7] text-[var(--ink)]">
-      <p className="text-[17px] font-semibold">Centro Logístico 3D · en construcción</p>
-    </main>
+    <div className="relative h-full w-full overflow-hidden bg-[#0c1424]">
+      <Canvas
+        shadows={{ type: THREE.PCFSoftShadowMap }}
+        camera={{ position: [px, py, pz], fov: 35, near: 0.5, far: 9000 }}
+        gl={{ antialias: quality === 'baja', powerPreference: 'high-performance', stencil: false }}
+        dpr={[...DPR[quality]]}
+        onPointerMissed={() => select(null)}
+      >
+        <Scene />
+      </Canvas>
+      <Hud />
+    </div>
   )
 }

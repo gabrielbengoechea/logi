@@ -97,6 +97,12 @@ Además:
 - Costo total por rubro, margen y resultado.
 - Kilómetros recorridos y llenado de los camiones.
 
+## Avance
+
+- H0 y H1 listos: motor con pruebas (`src/sim/engine.test.ts`).
+- H2 en curso: nave en 3D con estanterías, pallets según el stock de cada día, ubicaciones por rotación,
+  andenes con camiones y pallets en la playa, autoelevadores, oficinas, patio y Ruta 5.
+
 ## Hitos
 
 | Hito | Contenido |

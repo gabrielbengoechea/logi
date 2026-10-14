@@ -120,7 +120,7 @@ export const FAMILIES: Family[] = [
   {
     key: 'electro',
     label: 'Pequeños electrodomésticos',
-    color: '#3b4a63',
+    color: '#b08a64',
     share: 0.07,
     cost: [15, 90],
     margin: 0.13,
