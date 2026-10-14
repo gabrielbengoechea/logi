@@ -164,7 +164,9 @@ export interface Product {
   casesPerPallet: number
   unitsPerPallet: number
   imported: boolean
-  /** Demora media de reposición en días corridos. */
+  /** Proveedor (los productos de un mismo proveedor se pueden pedir juntos: can-order). */
+  supplier: number
+  /** Demora media de reposición en días corridos (la del proveedor). */
   leadDays: number
   /** Demanda media diaria (todos los clientes juntos, todos los días de la semana), sin estacionalidad. */
   dailyDemand: number
@@ -182,6 +184,7 @@ const intIn = (r: () => number, [a, b]: [number, number]) => Math.floor(a + r() 
 export function generateCatalog(seed: number, count = 240, palletsPerDay = 180): Product[] {
   const r = mulberry32(seed * 7919 + 13)
   const products: Product[] = []
+  const suppliers: Supplier[] = []
   const used = new Set<string>()
   for (const fam of FAMILIES) {
     const n = Math.round(count * fam.share)
@@ -208,19 +211,48 @@ export function generateCatalog(seed: number, count = 240, palletsPerDay = 180):
         casesPerPallet,
         unitsPerPallet: unitsPerCase * casesPerPallet,
         imported,
-        leadDays: imported ? intIn(r, [35, 50]) : intIn(r, [3, 7]),
+        supplier: -1,
+        leadDays: 0,
         dailyDemand: Math.exp(1.2 * z),
         cv: lerp(r, fam.cv),
         abc: 'C',
       })
     }
   }
+  // Proveedores: por familia y origen, de a 8 productos como máximo; cada uno con su demora.
+  for (const fam of FAMILIES)
+    for (const imported of [false, true]) {
+      const group = products.filter((p) => p.family === fam.key && p.imported === imported)
+      for (let i = 0; i < group.length; i += 8) {
+        const id = suppliers.length
+        const leadDays = imported ? intIn(r, [35, 50]) : intIn(r, [3, 7])
+        suppliers.push({ id, name: `${fam.label} · ${imported ? 'importador' : 'proveedor local'} ${Math.floor(i / 8) + 1}`, family: fam.key, imported, leadDays })
+        for (const p of group.slice(i, i + 8)) {
+          p.supplier = id
+          p.leadDays = leadDays
+        }
+      }
+    }
   // Escala: el total en pallets por día queda en palletsPerDay.
   const pallets = products.reduce((s, p) => s + p.dailyDemand / p.unitsPerPallet, 0)
   for (const p of products) p.dailyDemand *= palletsPerDay / pallets
   classifyAbc(products)
+  SUPPLIERS.set(products, suppliers)
   return products
 }
+
+export interface Supplier {
+  id: number
+  name: string
+  family: FamilyKey
+  imported: boolean
+  leadDays: number
+}
+
+const SUPPLIERS = new WeakMap<Product[], Supplier[]>()
+
+/** Proveedores del catálogo (en el orden de su id). */
+export const suppliersOf = (products: Product[]) => SUPPLIERS.get(products) ?? []
 
 /** Clase A: el 80 % del valor vendido; B: el 15 % siguiente; C: el resto. */
 export function classifyAbc(products: Product[]) {

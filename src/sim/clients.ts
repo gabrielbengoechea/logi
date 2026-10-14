@@ -8,8 +8,8 @@ export interface Client {
   /** Población que atiende (aprox., censo 2023), para repartir la demanda. */
   population: number
   /**
-   * Distancia por ruta desde la nave, en km (solo ida). Aproximada a partir de las distancias usuales desde
-   * Montevideo; se recalcula con la red vial real en el H3.
+   * Distancia por ruta desde la nave, en km (solo ida): camino más corto por la red vial de Overture / OpenStreetMap
+   * (tools/geo/build-uruguay.ts).
    */
   km: number
   /** Ruta principal por la que se llega. */
@@ -22,25 +22,25 @@ export interface Client {
 export const DEPOT = { name: 'Centro logístico Ruta 5', at: [-56.255, -34.795] as [number, number] }
 
 export const CLIENTS: Client[] = [
-  { key: 'mvd-c', name: 'Montevideo Centro', department: 'Montevideo', at: [-56.19, -34.905], population: 650_000, km: 22, route: 'Ruta 5', summer: 0 },
-  { key: 'mvd-e', name: 'Montevideo Este', department: 'Montevideo', at: [-56.1, -34.88], population: 650_000, km: 30, route: 'Anillo Perimetral', summer: 0 },
-  { key: 'can', name: 'Canelones', department: 'Canelones', at: [-56.284, -34.522], population: 607_000, km: 32, route: 'Ruta 5', summer: 0.1 },
-  { key: 'mal', name: 'Maldonado', department: 'Maldonado', at: [-54.958, -34.903], population: 212_000, km: 145, route: 'Ruta Interbalnearia', summer: 0.9 },
-  { key: 'col', name: 'Colonia del Sacramento', department: 'Colonia', at: [-57.842, -34.471], population: 136_000, km: 167, route: 'Ruta 1', summer: 0.15 },
-  { key: 'sal', name: 'Salto', department: 'Salto', at: [-57.965, -31.388], population: 133_000, km: 486, route: 'Ruta 3', summer: 0.1 },
-  { key: 'pay', name: 'Paysandú', department: 'Paysandú', at: [-58.075, -32.321], population: 118_000, km: 368, route: 'Ruta 3', summer: 0.05 },
-  { key: 'sjo', name: 'San José de Mayo', department: 'San José', at: [-56.713, -34.337], population: 116_000, km: 83, route: 'Ruta 1 y Ruta 3', summer: 0 },
-  { key: 'riv', name: 'Rivera', department: 'Rivera', at: [-55.551, -30.905], population: 104_000, km: 478, route: 'Ruta 5', summer: 0 },
-  { key: 'tac', name: 'Tacuarembó', department: 'Tacuarembó', at: [-55.984, -31.711], population: 93_000, km: 370, route: 'Ruta 5', summer: 0 },
-  { key: 'mel', name: 'Melo', department: 'Cerro Largo', at: [-54.183, -32.37], population: 90_000, km: 397, route: 'Ruta 8', summer: 0 },
-  { key: 'mer', name: 'Mercedes', department: 'Soriano', at: [-58.031, -33.252], population: 83_000, km: 268, route: 'Ruta 2', summer: 0.05 },
-  { key: 'roc', name: 'Rocha', department: 'Rocha', at: [-54.333, -34.483], population: 78_000, km: 221, route: 'Ruta 9', summer: 1.2 },
-  { key: 'art', name: 'Artigas', department: 'Artigas', at: [-56.468, -30.4], population: 76_000, km: 590, route: 'Ruta 30', summer: 0 },
-  { key: 'flo', name: 'Florida', department: 'Florida', at: [-56.215, -34.099], population: 69_000, km: 78, route: 'Ruta 5', summer: 0 },
-  { key: 'min', name: 'Minas', department: 'Lavalleja', at: [-55.237, -34.376], population: 60_000, km: 132, route: 'Ruta 8', summer: 0 },
-  { key: 'dur', name: 'Durazno', department: 'Durazno', at: [-56.523, -33.381], population: 59_000, km: 163, route: 'Ruta 5', summer: 0 },
-  { key: 'fbe', name: 'Fray Bentos', department: 'Río Negro', at: [-58.304, -33.116], population: 57_000, km: 299, route: 'Ruta 2', summer: 0.05 },
-  { key: 'tyt', name: 'Treinta y Tres', department: 'Treinta y Tres', at: [-54.383, -33.233], population: 49_000, km: 296, route: 'Ruta 8', summer: 0 },
+  { key: 'mvd-c', name: 'Montevideo Centro', department: 'Montevideo', at: [-56.19, -34.905], population: 650_000, km: 17, route: 'Ruta 5', summer: 0 },
+  { key: 'mvd-e', name: 'Montevideo Este', department: 'Montevideo', at: [-56.1, -34.88], population: 650_000, km: 22, route: 'Anillo Perimetral', summer: 0 },
+  { key: 'can', name: 'Canelones', department: 'Canelones', at: [-56.284, -34.522], population: 607_000, km: 35, route: 'Ruta 5', summer: 0.1 },
+  { key: 'mal', name: 'Maldonado', department: 'Maldonado', at: [-54.958, -34.903], population: 212_000, km: 143, route: 'Ruta Interbalnearia', summer: 0.9 },
+  { key: 'col', name: 'Colonia del Sacramento', department: 'Colonia', at: [-57.842, -34.471], population: 136_000, km: 177, route: 'Ruta 1', summer: 0.15 },
+  { key: 'sal', name: 'Salto', department: 'Salto', at: [-57.965, -31.388], population: 133_000, km: 499, route: 'Ruta 3', summer: 0.1 },
+  { key: 'pay', name: 'Paysandú', department: 'Paysandú', at: [-58.075, -32.321], population: 118_000, km: 361, route: 'Ruta 3', summer: 0.05 },
+  { key: 'sjo', name: 'San José de Mayo', department: 'San José', at: [-56.713, -34.337], population: 116_000, km: 85, route: 'Ruta 1 y Ruta 3', summer: 0 },
+  { key: 'riv', name: 'Rivera', department: 'Rivera', at: [-55.551, -30.905], population: 104_000, km: 486, route: 'Ruta 5', summer: 0 },
+  { key: 'tac', name: 'Tacuarembó', department: 'Tacuarembó', at: [-55.984, -31.711], population: 93_000, km: 380, route: 'Ruta 5', summer: 0 },
+  { key: 'mel', name: 'Melo', department: 'Cerro Largo', at: [-54.183, -32.37], population: 90_000, km: 390, route: 'Ruta 8', summer: 0 },
+  { key: 'mer', name: 'Mercedes', department: 'Soriano', at: [-58.031, -33.252], population: 83_000, km: 276, route: 'Ruta 2', summer: 0.05 },
+  { key: 'roc', name: 'Rocha', department: 'Rocha', at: [-54.333, -34.483], population: 78_000, km: 213, route: 'Ruta 9', summer: 1.2 },
+  { key: 'art', name: 'Artigas', department: 'Artigas', at: [-56.468, -30.4], population: 76_000, km: 579, route: 'Ruta 30', summer: 0 },
+  { key: 'flo', name: 'Florida', department: 'Florida', at: [-56.215, -34.099], population: 69_000, km: 93, route: 'Ruta 5', summer: 0 },
+  { key: 'min', name: 'Minas', department: 'Lavalleja', at: [-55.237, -34.376], population: 60_000, km: 127, route: 'Ruta 8', summer: 0 },
+  { key: 'dur', name: 'Durazno', department: 'Durazno', at: [-56.523, -33.381], population: 59_000, km: 172, route: 'Ruta 5', summer: 0 },
+  { key: 'fbe', name: 'Fray Bentos', department: 'Río Negro', at: [-58.304, -33.116], population: 57_000, km: 308, route: 'Ruta 2', summer: 0.05 },
+  { key: 'tyt', name: 'Treinta y Tres', department: 'Treinta y Tres', at: [-54.383, -33.233], population: 49_000, km: 292, route: 'Ruta 8', summer: 0 },
   { key: 'tri', name: 'Trinidad', department: 'Flores', at: [-56.889, -33.517], population: 26_000, km: 180, route: 'Ruta 3', summer: 0 },
 ]
 

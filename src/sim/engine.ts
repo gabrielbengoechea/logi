@@ -1,4 +1,5 @@
-import { FAMILIES, familyOf, generateCatalog, seasonFactor, type AbcClass, type Product } from './catalog'
+import { FAMILIES, familyOf, generateCatalog, seasonFactor, suppliersOf, type AbcClass, type Product, type Supplier } from './catalog'
+import { G, eoq, kFor, sigmaC, type Criterion } from './course'
 import { CLIENTS, CLIENT_SHARE, defaultFrequency, summerFactor } from './clients'
 import { gammaMean1, hashUniform, mulberry32, poissonFrom } from './rng'
 import { DOCKS, HALL, POSITIONS } from './warehouse'
@@ -11,9 +12,19 @@ export interface Tariffs {
   capitalRate: number
   /** Depósito externo para lo que no entra en la nave, USD por pallet por día. */
   overflowPalletDay: number
-  /** Costo de emitir una orden de compra, USD por línea. */
+  /** Costo de emitir una orden de compra (S), USD por orden: proveedor local o importación. */
   orderLocal: number
   orderImport: number
+  /** Costo de cada línea (producto) de una orden. Es lo único que cuesta sumarse a una orden ya emitida. */
+  orderLine: number
+  /** Tasa anual de costo de mantener (h): H = h·c. Capital, seguros, mermas y obsolescencia. */
+  holdingRate: number
+  /**
+   * Sumar a H el costo anual del lugar que ocupa cada unidad en la nave (alquiler por posición de pallet dividido las
+   * unidades por pallet). El curso usa H = h·c; sin el espacio, el lote económico de productos baratos y voluminosos
+   * (bebidas) sale enorme y no entra en la nave.
+   */
+  spaceInH: boolean
   /** Operario, USD por mes con cargas sociales. */
   operatorMonth: number
   /** Recargo del turno nocturno. */
@@ -38,6 +49,9 @@ export const BASE_TARIFFS: Tariffs = {
   overflowPalletDay: 0.6,
   orderLocal: 60,
   orderImport: 250,
+  orderLine: 8,
+  holdingRate: 0.25,
+  spaceInH: true,
   operatorMonth: 1600,
   nightPremium: 0.2,
   forkliftMonth: 1200,
@@ -92,17 +106,24 @@ export const BASE_SCENARIO: Scenario = {
   tariffs: BASE_TARIFFS,
 }
 
+/** Modelos de reposición del curso. */
+export type Model = 'continua' | 'periodica' | 'canorder'
+
+/**
+ * Criterio para el factor de seguridad k. Igual que en el curso, salvo que el costo por unidad perdida (c_up) de cada
+ * producto sale de su margen más la penalización por faltante, y B se da en dólares por faltante.
+ */
+export type ServiceCriterion = { kind: 'nsc'; nsc: number } | { kind: 'fr'; fr: number } | { kind: 'cup' } | { kind: 'b'; b: number }
+
 /** Política de reposición de una clase ABC. */
 export interface Policy {
-  /** Punto de pedido y lote (revisión continua) o revisión periódica hasta un máximo. */
-  kind: 'sQ' | 'RS'
-  /** Nivel de servicio objetivo (define el stock de seguridad). */
-  service: number
-  /** Lote: económico (EOQ) o días de cobertura. Solo para sQ. */
+  model: Model
+  criterion: ServiceCriterion
+  /** Lote: Q* (EOQ) o días de cobertura (revisión continua y can-order). */
   lot: 'eoq' | 'cover'
   coverDays: number
-  /** Cada cuántos días se revisa. Solo para RS. */
-  reviewDays: number
+  /** Período de revisión R, en días (revisión periódica). */
+  R: number
 }
 
 /** Lo que decide el jugador. */
@@ -119,9 +140,9 @@ export interface Decisions {
 
 export const BASE_DECISIONS: Decisions = {
   policy: {
-    A: { kind: 'sQ', service: 0.98, lot: 'eoq', coverDays: 14, reviewDays: 7 },
-    B: { kind: 'sQ', service: 0.95, lot: 'eoq', coverDays: 21, reviewDays: 7 },
-    C: { kind: 'sQ', service: 0.9, lot: 'eoq', coverDays: 30, reviewDays: 14 },
+    A: { model: 'continua', criterion: { kind: 'nsc', nsc: 0.98 }, lot: 'eoq', coverDays: 14, R: 7 },
+    B: { model: 'continua', criterion: { kind: 'nsc', nsc: 0.95 }, lot: 'eoq', coverDays: 21, R: 7 },
+    C: { model: 'periodica', criterion: { kind: 'nsc', nsc: 0.9 }, lot: 'eoq', coverDays: 30, R: 14 },
   },
   shifts: 2,
   operatorsPerShift: 8,
@@ -160,6 +181,7 @@ export const PRODUCTIVITY = {
 }
 
 const DAYS_PER_MONTH = 30.4
+const CLASS_INDEX: Record<AbcClass, number> = { A: 0, B: 1, C: 2 }
 /** Suavizado del pronóstico: con 0,05, pesa más o menos el último mes. */
 const FORECAST_ALPHA = 0.05
 const WEEKDAYS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
@@ -234,6 +256,12 @@ export interface DayStats {
   hoursAvailable: number
   forkliftUse: number
   purchaseOrders: number
+  /** Ciclos de reposición cerrados (llegó la orden siguiente) y cuántos tuvieron algún faltante, por clase A, B, C. */
+  cycles: [number, number, number]
+  cyclesShort: [number, number, number]
+  /** Unidades pedidas y entregadas por clase A, B, C. */
+  requestedByClass: [number, number, number]
+  shippedByClass: [number, number, number]
   km: number
   truckFill: number
   shipments: Shipment[]
@@ -251,13 +279,6 @@ interface Inbound {
   sku: number
   qty: number
   arrive: number
-}
-
-/** z de la normal estándar para un nivel de servicio (aproximación de Acklam, suficiente acá). */
-export function zFor(p: number): number {
-  const q = Math.min(Math.max(p, 0.5), 0.9999)
-  const t = Math.sqrt(-2 * Math.log(1 - q))
-  return t - (2.515517 + 0.802853 * t + 0.010328 * t * t) / (1 + 1.432788 * t + 0.189269 * t * t + 0.001308 * t * t * t)
 }
 
 export function emptyCosts(): Costs {
@@ -290,12 +311,17 @@ export class Simulation {
   /** Días de camión propio ya comprometidos en viajes largos. */
   private truckBusy: number[] = []
   private readonly demandShock: (sku: number, day: number) => number
+  readonly suppliers: Supplier[]
+  /** Hubo faltante en el ciclo de reposición en curso (para medir el nivel de servicio de ciclo). */
+  private readonly shortInCycle: Uint8Array
 
   constructor(scenario: Scenario = BASE_SCENARIO, decisions: Decisions = BASE_DECISIONS) {
     this.scenario = scenario
     this.decisions = decisions
     this.products = generateCatalog(scenario.seed, scenario.products, scenario.palletsPerDay)
+    this.suppliers = suppliersOf(this.products)
     const n = this.products.length
+    this.shortInCycle = new Uint8Array(n)
     this.onHand = new Float64Array(n)
     this.onOrder = new Float64Array(n)
     this.forecast = new Float64Array(n)
@@ -321,7 +347,7 @@ export class Simulation {
       const d = p.dailyDemand * scenario.demandFactor
       this.forecast[p.id] = d
       this.forecastDev[p.id] = d * (p.cv * scenario.variability + 1) + Math.sqrt(d)
-      const { s, q } = this.reorderLevels(p.id)
+      const { ROP: s, Q: q } = this.reorderLevels(p.id)
       this.onHand[p.id] = Math.round(s - d * this.leadTime(p) + q / 2 + d * 3)
       if (p.imported) {
         const each = Math.max(q, d * 14)
@@ -364,26 +390,59 @@ export class Simulation {
     return this.draw(this.expectedTotal(sku, day) * this.demandShock(sku, day) * CLIENT_SHARE[client] * summer, sku, client, day)
   }
 
-  /** Punto de pedido (s), lote (q) y máximo (S) de un producto con la política de su clase. */
+  /** Costo de emitir una orden por un solo producto (S del curso): la orden más una línea. */
+  orderCost(p: Product) {
+    const t = this.scenario.tariffs
+    return (p.imported ? t.orderImport : t.orderLocal) + t.orderLine
+  }
+
+  /** Costo de mantener una unidad un año (H): h·c, más el espacio si está activado. */
+  holdingCost(p: Product) {
+    const t = this.scenario.tariffs
+    const space = t.spaceInH ? (t.rentM2Month * this.scenario.areaM2 * 12) / this.scenario.positions / p.unitsPerPallet : 0
+    return t.holdingRate * p.cost + space
+  }
+
+  /** Costo por unidad perdida (c_up) de un producto: el margen que no se cobra más la penalización por faltante. */
+  cup(p: Product) {
+    return p.price - p.cost + p.price * this.scenario.tariffs.shortagePenalty
+  }
+
+  /**
+   * Niveles de la política de un producto, con las fórmulas del curso y el pronóstico del día (en días):
+   * - revisión continua: ROP = d·LT + k·σc y lote Q (Q* o cobertura);
+   * - revisión periódica: NOP = d·(LT + R) + k·σc, con σc sobre LT + R;
+   * - can-order: ROP y Q como la continua, COP = ROP + d·S_ahorrado / (H_t·Q) y OBS = ROP + Q.
+   */
   reorderLevels(sku: number) {
     const p = this.products[sku]
     const pol = this.decisions.policy[p.abc]
     const t = this.scenario.tariffs
-    const d = this.forecast[sku]
-    const sigma = this.forecastDev[sku]
-    const lt = this.leadTime(p)
-    const protect = pol.kind === 'RS' ? lt + pol.reviewDays : lt
-    // Demora variable: desvío de una uniforme de ancho LEAD_SPREAD.
-    const sigmaLt = this.leadSpread(p) / Math.sqrt(12)
-    const safety = zFor(pol.service) * Math.sqrt(protect * sigma * sigma + d * d * sigmaLt * sigmaLt)
-    const s = d * protect + safety
-    // Costo anual de guardar una unidad: capital más la parte del alquiler que ocupa su lugar en el pallet.
-    const positionYear = (t.rentM2Month * this.scenario.areaM2 * 12) / this.scenario.positions
-    const h = p.cost * t.capitalRate + positionYear / p.unitsPerPallet
-    const k = p.imported ? t.orderImport : t.orderLocal
-    const eoq = Math.sqrt((2 * d * 365 * k) / h)
-    const q = Math.max(p.unitsPerCase, pol.lot === 'eoq' ? eoq : d * pol.coverDays)
-    return { s, q: Math.ceil(q / p.unitsPerCase) * p.unitsPerCase, S: s + (pol.kind === 'RS' ? 0 : q), safety }
+    const d = Math.max(this.forecast[sku], 1e-6)
+    const sigmaD = this.forecastDev[sku]
+    const LT = this.leadTime(p)
+    // Demora variable: desvío de una uniforme de ancho leadSpread.
+    const sigmaLT = this.leadSpread(p) / Math.sqrt(12)
+    const D = d * 365
+    const H = this.holdingCost(p)
+    const S = this.orderCost(p)
+    const crit: Criterion = pol.criterion.kind === 'cup' ? { kind: 'cup', cup: this.cup(p) } : pol.criterion
+    const round = (q: number) => Math.max(p.unitsPerCase, Math.ceil(q / p.unitsPerCase) * p.unitsPerCase)
+    if (pol.model === 'periodica') {
+      const sc = sigmaC(d, sigmaD, LT + pol.R, sigmaLT)
+      const DR = d * pol.R
+      const k = kFor(crit, { D, H, lot: DR, sigmaC: sc })
+      const SS = k * sc
+      return { k, sigmaC: sc, SS, ROP: d * LT + SS, Q: round(DR), NOP: d * (LT + pol.R) + SS, COP: 0, OBS: 0, expectedShort: sc * G(k) }
+    }
+    const Q = round(pol.lot === 'eoq' ? eoq(D, S, H) : d * pol.coverDays)
+    const sc = sigmaC(d, sigmaD, LT, sigmaLT)
+    const k = kFor(crit, { D, H, lot: Q, sigmaC: sc })
+    const SS = k * sc
+    const ROP = d * LT + SS
+    // Can-order: sumarse a una orden ahorra el costo de emitirla (queda solo la línea).
+    const approach = (S - t.orderLine) / ((H / 365) * Q)
+    return { k, sigmaC: sc, SS, ROP, Q, NOP: ROP + Q, COP: ROP + d * approach, OBS: ROP + Q, expectedShort: sc * G(k) }
   }
 
   private palletsOf(sku: number, qty: number) {
@@ -422,6 +481,10 @@ export class Simulation {
       hoursAvailable: 0,
       forkliftUse: 0,
       purchaseOrders: 0,
+      cycles: [0, 0, 0],
+      cyclesShort: [0, 0, 0],
+      requestedByClass: [0, 0, 0],
+      shippedByClass: [0, 0, 0],
       km: 0,
       truckFill: 0,
       shipments: [],
@@ -529,8 +592,12 @@ export class Simulation {
         stats.revenue += qty * p.price
         stats.cogs += qty * p.cost
         shippedValue.set(order.client, (shippedValue.get(order.client) ?? 0) + qty * p.cost)
+        const ci = CLASS_INDEX[p.abc]
+        stats.requestedByClass[ci] += l.qty
+        stats.shippedByClass[ci] += qty
         const missing = l.qty - qty
         if (missing > 0) {
+          this.shortInCycle[l.sku] = 1
           stats.short += missing
           if (sc.shortage === 'backorder') this.pending[order.client][l.sku] += missing
           else stats.lostSales += missing * p.price
@@ -551,6 +618,11 @@ export class Simulation {
       if (!take(pallets / P.receivePalletsPerHour, pallets / P.forkliftMovesPerHour)) return true
       this.onHand[o.sku] += o.qty
       this.onOrder[o.sku] -= o.qty
+      // Llegó la reposición: se cierra el ciclo y se anota si tuvo faltantes.
+      const ci = CLASS_INDEX[this.products[o.sku].abc]
+      stats.cycles[ci]++
+      if (this.shortInCycle[o.sku]) stats.cyclesShort[ci]++
+      this.shortInCycle[o.sku] = 0
       stats.palletsIn += pallets
       return false
     })
@@ -582,30 +654,51 @@ export class Simulation {
     costs.fuel = ownKm * t.truckKm * (0.7 * sc.fuel + 0.3)
     stats.truckFill = truckSlots ? stats.palletsOut / truckSlots : 0
 
-    // 8. Reposición: se revisa cada producto con la política de su clase (solo los días hábiles).
-    if (open)
+    // 8. Reposición, solo los días hábiles. Cada producto sigue el modelo de su clase; en can-order, el proveedor
+    // agrupa: si un producto cae por debajo de su ROP se emite la orden y se suman los que están por debajo de su COP.
+    if (open) {
+      const workday = Math.floor(day / 7) * 5 + weekday
+      const lines = new Map<number, { sku: number; qty: number }[]>()
+      const order = (p: Product, qty: number) => {
+        if (qty <= 0) return
+        const list = lines.get(p.supplier) ?? []
+        list.push({ sku: p.id, qty: Math.ceil(qty / p.unitsPerCase) * p.unitsPerCase })
+        lines.set(p.supplier, list)
+      }
+      const position = (p: Product) => this.onHand[p.id] + this.onOrder[p.id]
+      const canOrder = new Map<number, { p: Product; lv: ReturnType<Simulation['reorderLevels']> }[]>()
       for (const p of this.products) {
         const pol = dec.policy[p.abc]
-        // Revisión periódica contada en días hábiles, repartida entre productos para no pedir todo el mismo día.
-        const workday = Math.floor(day / 7) * 5 + weekday
-        if (pol.kind === 'RS' && (workday + p.id) % Math.max(1, Math.round((pol.reviewDays * 5) / 7)) !== 0) continue
-        const position = this.onHand[p.id] + this.onOrder[p.id]
-        const { s, q, S } = this.reorderLevels(p.id)
-        let qty = 0
-        if (pol.kind === 'sQ') {
-          if (position > s) continue
-          qty = q * Math.ceil((s - position) / q + 1e-9)
+        if (pol.model === 'periodica') {
+          // Revisión cada R días, contada en días hábiles y repartida entre productos.
+          if ((workday + p.id) % Math.max(1, Math.round((pol.R * 5) / 7)) !== 0) continue
+          order(p, this.reorderLevels(p.id).NOP - position(p))
+        } else if (pol.model === 'continua') {
+          const { ROP, Q } = this.reorderLevels(p.id)
+          if (position(p) <= ROP) order(p, Q * Math.ceil((ROP - position(p)) / Q + 1e-9))
         } else {
-          qty = Math.ceil(Math.max(0, S - position) / p.unitsPerCase) * p.unitsPerCase
-          if (qty <= 0) continue
+          const list = canOrder.get(p.supplier) ?? []
+          list.push({ p, lv: this.reorderLevels(p.id) })
+          canOrder.set(p.supplier, list)
         }
-        const jitter = (hashUniform(sc.seed, day, p.id, 7) - 0.5) * this.leadSpread(p)
-        const arrive = day + Math.max(1, Math.round(this.leadTime(p) + jitter))
-        this.inbound.push({ sku: p.id, qty, arrive })
-        this.onOrder[p.id] += qty
-        costs.ordering += p.imported ? t.orderImport : t.orderLocal
+      }
+      for (const items of canOrder.values()) {
+        if (!items.some(({ p, lv }) => position(p) < lv.ROP)) continue
+        for (const { p, lv } of items) if (position(p) < lv.COP) order(p, lv.OBS - position(p))
+      }
+      // Una orden por proveedor y día: se paga la orden más una línea por producto.
+      for (const [sup, list] of lines) {
+        const supplier = this.suppliers[sup]
+        const jitter = (hashUniform(sc.seed, day, sup, 7) - 0.5) * this.leadSpread(this.products[list[0].sku])
+        const arrive = day + Math.max(1, Math.round(this.leadTime(this.products[list[0].sku]) + jitter))
+        for (const l of list) {
+          this.inbound.push({ sku: l.sku, qty: l.qty, arrive })
+          this.onOrder[l.sku] += l.qty
+        }
+        costs.ordering += (supplier.imported ? t.orderImport : t.orderLocal) + t.orderLine * list.length
         stats.purchaseOrders++
       }
+    }
 
     // 9. Stock y costos del día.
     let pallets = 0

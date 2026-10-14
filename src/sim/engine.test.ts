@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { generateCatalog } from './catalog'
-import { BASE_DECISIONS, BASE_SCENARIO, Simulation, totalCost, zFor, type Decisions, type Scenario } from './engine'
+import { BASE_DECISIONS, BASE_SCENARIO, Simulation, totalCost, type Decisions, type Scenario } from './engine'
 
 const DAYS = 140
 
@@ -65,8 +65,9 @@ describe('simulación', () => {
   })
 
   it('más nivel de servicio: menos faltantes y más stock', () => {
-    const low = run({}, { policy: { A: { ...BASE_DECISIONS.policy.A, service: 0.8 }, B: { ...BASE_DECISIONS.policy.B, service: 0.8 }, C: { ...BASE_DECISIONS.policy.C, service: 0.8 } } })
-    const high = run({}, { policy: { A: { ...BASE_DECISIONS.policy.A, service: 0.995 }, B: { ...BASE_DECISIONS.policy.B, service: 0.99 }, C: { ...BASE_DECISIONS.policy.C, service: 0.98 } } })
+    const nsc = (v: number) => ({ kind: 'nsc' as const, nsc: v })
+    const low = run({}, { policy: { A: { ...BASE_DECISIONS.policy.A, criterion: nsc(0.8) }, B: { ...BASE_DECISIONS.policy.B, criterion: nsc(0.8) }, C: { ...BASE_DECISIONS.policy.C, criterion: nsc(0.8) } } })
+    const high = run({}, { policy: { A: { ...BASE_DECISIONS.policy.A, criterion: nsc(0.995) }, B: { ...BASE_DECISIONS.policy.B, criterion: nsc(0.99) }, C: { ...BASE_DECISIONS.policy.C, criterion: nsc(0.98) } } })
     expect(high.fill).toBeGreaterThan(low.fill)
     expect(high.stock).toBeGreaterThan(low.stock)
   })
@@ -89,16 +90,24 @@ describe('simulación', () => {
   })
 
   it('la revisión periódica también funciona', () => {
-    const rs = { kind: 'RS' as const, service: 0.95, lot: 'eoq' as const, coverDays: 14, reviewDays: 7 }
-    const r = run({}, { policy: { A: rs, B: rs, C: rs } })
+    const rp = { model: 'periodica' as const, criterion: { kind: 'nsc' as const, nsc: 0.95 }, lot: 'eoq' as const, coverDays: 14, R: 7 }
+    const r = run({}, { policy: { A: rp, B: rp, C: rp } })
     expect(r.fill).toBeGreaterThan(0.93)
+  })
+
+  it('can-order agrupa los pedidos por proveedor: menos órdenes que la revisión continua', () => {
+    const pol = (model: 'continua' | 'canorder') => ({ model, criterion: { kind: 'nsc' as const, nsc: 0.95 }, lot: 'eoq' as const, coverDays: 14, R: 7 })
+    const cont = run({}, { policy: { A: pol('continua'), B: pol('continua'), C: pol('continua') } })
+    const can = run({}, { policy: { A: pol('canorder'), B: pol('canorder'), C: pol('canorder') } })
+    const orders = (r: typeof cont) => r.out.reduce((s, d) => s + d.purchaseOrders, 0)
+    expect(orders(can)).toBeLessThan(orders(cont))
+    expect(can.fill).toBeGreaterThan(0.93)
+  })
+
+  it('con fill rate como criterio, el servicio medido queda cerca del objetivo', () => {
+    const fr = { model: 'continua' as const, criterion: { kind: 'fr' as const, fr: 0.97 }, lot: 'eoq' as const, coverDays: 14, R: 7 }
+    const r = run({ seasonality: false }, { policy: { A: fr, B: fr, C: fr } }, 200)
+    expect(r.fill).toBeGreaterThan(0.94)
   })
 })
 
-describe('fórmulas', () => {
-  it('z del nivel de servicio', () => {
-    expect(zFor(0.95)).toBeCloseTo(1.645, 2)
-    expect(zFor(0.98)).toBeCloseTo(2.054, 2)
-    expect(zFor(0.5)).toBeCloseTo(0, 2)
-  })
-})
