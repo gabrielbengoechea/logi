@@ -267,6 +267,9 @@ export interface DayStats {
   shipments: Shipment[]
   /** Pallets ocupados por producto al cierre del día. */
   palletsBySku: Uint16Array
+  /** Pronóstico del día por producto: demanda media diaria y su desvío (lo que usa la política). */
+  forecastBySku: Float32Array
+  forecastDevBySku: Float32Array
 }
 
 interface ClientOrder {
@@ -414,12 +417,12 @@ export class Simulation {
    * - revisión periódica: NOP = d·(LT + R) + k·σc, con σc sobre LT + R;
    * - can-order: ROP y Q como la continua, COP = ROP + d·S_ahorrado / (H_t·Q) y OBS = ROP + Q.
    */
-  reorderLevels(sku: number) {
+  reorderLevels(sku: number, forecast = this.forecast[sku], forecastDev = this.forecastDev[sku]) {
     const p = this.products[sku]
     const pol = this.decisions.policy[p.abc]
     const t = this.scenario.tariffs
-    const d = Math.max(this.forecast[sku], 1e-6)
-    const sigmaD = this.forecastDev[sku]
+    const d = Math.max(forecast, 1e-6)
+    const sigmaD = forecastDev
     const LT = this.leadTime(p)
     // Demora variable: desvío de una uniforme de ancho leadSpread.
     const sigmaLT = this.leadSpread(p) / Math.sqrt(12)
@@ -428,12 +431,13 @@ export class Simulation {
     const S = this.orderCost(p)
     const crit: Criterion = pol.criterion.kind === 'cup' ? { kind: 'cup', cup: this.cup(p) } : pol.criterion
     const round = (q: number) => Math.max(p.unitsPerCase, Math.ceil(q / p.unitsPerCase) * p.unitsPerCase)
+    const inputs = { model: pol.model, d, sigmaD, LT, sigmaLT, D, H, S, R: pol.R, eoq: eoq(D, S, H) }
     if (pol.model === 'periodica') {
       const sc = sigmaC(d, sigmaD, LT + pol.R, sigmaLT)
       const DR = d * pol.R
       const k = kFor(crit, { D, H, lot: DR, sigmaC: sc })
       const SS = k * sc
-      return { k, sigmaC: sc, SS, ROP: d * LT + SS, Q: round(DR), NOP: d * (LT + pol.R) + SS, COP: 0, OBS: 0, expectedShort: sc * G(k) }
+      return { ...inputs, k, sigmaC: sc, SS, ROP: d * LT + SS, Q: round(DR), DR, NOP: d * (LT + pol.R) + SS, COP: 0, OBS: 0, expectedShort: sc * G(k) }
     }
     const Q = round(pol.lot === 'eoq' ? eoq(D, S, H) : d * pol.coverDays)
     const sc = sigmaC(d, sigmaD, LT, sigmaLT)
@@ -442,7 +446,7 @@ export class Simulation {
     const ROP = d * LT + SS
     // Can-order: sumarse a una orden ahorra el costo de emitirla (queda solo la línea).
     const approach = (S - t.orderLine) / ((H / 365) * Q)
-    return { k, sigmaC: sc, SS, ROP, Q, NOP: ROP + Q, COP: ROP + d * approach, OBS: ROP + Q, expectedShort: sc * G(k) }
+    return { ...inputs, k, sigmaC: sc, SS, ROP, Q, DR: 0, NOP: ROP + Q, COP: ROP + d * approach, OBS: ROP + Q, expectedShort: sc * G(k) }
   }
 
   private palletsOf(sku: number, qty: number) {
@@ -489,6 +493,8 @@ export class Simulation {
       truckFill: 0,
       shipments: [],
       palletsBySku: new Uint16Array(n),
+      forecastBySku: new Float32Array(0),
+      forecastDevBySku: new Float32Array(0),
     }
 
     // 1. Demanda del día en los clientes; se acumula hasta su próxima entrega.
@@ -720,6 +726,8 @@ export class Simulation {
     costs.forklifts = (dec.forklifts * t.forkliftMonth) / DAYS_PER_MONTH
     costs.fleet = (dec.ownTrucks * t.truckMonth) / DAYS_PER_MONTH
 
+    stats.forecastBySku = Float32Array.from(this.forecast)
+    stats.forecastDevBySku = Float32Array.from(this.forecastDev)
     this.days.push(stats)
     this.day++
     return stats

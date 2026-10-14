@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { BASE_DECISIONS, BASE_SCENARIO, Simulation, type DayStats, type Decisions, type Scenario } from './sim/engine'
 import type { Product } from './sim/catalog'
+import { summarize, type Summary } from './sim/summary'
 
 export type View = 'nave' | 'andenes' | 'planta' | 'exterior' | 'mapa'
 /** Calidad gráfica: alta (sombras, oclusión ambiental y brillo), media (sin oclusión) o baja (sin efectos). */
@@ -34,20 +35,33 @@ function persist(key: string, v: unknown) {
   }
 }
 
-interface Run {
+export interface Run {
+  sim: Simulation
   products: Product[]
   days: DayStats[]
+  summary: Summary
 }
 
 function simulate(scenario: Scenario, decisions: Decisions): Run {
   const sim = new Simulation(scenario, decisions)
-  return { products: sim.products, days: sim.run(HORIZON_DAYS) }
+  const days = sim.run(HORIZON_DAYS)
+  return { sim, products: sim.products, days, summary: summarize(days, scenario) }
+}
+
+/** Corrida guardada para comparar: sus decisiones, su escenario y sus indicadores. */
+export interface Base {
+  decisions: Decisions
+  scenario: Scenario
+  summary: Summary
 }
 
 interface State {
   scenario: Scenario
   decisions: Decisions
   run: Run
+  base: Base
+  /** Simulando (un año tarda alrededor de un segundo). */
+  running: boolean
   /** Tiempo, en horas desde el inicio. */
   t: number
   playing: boolean
@@ -63,6 +77,10 @@ interface State {
   iconTint: IconTint
   uiScale: UiScale
 
+  /** Cambia decisiones o escenario y vuelve a simular el año. */
+  apply: (decisions: Decisions, scenario?: Scenario) => void
+  setBase: () => void
+  restoreBase: () => void
   setT: (t: number) => void
   advance: (seconds: number) => void
   togglePlay: () => void
@@ -82,7 +100,11 @@ const SCALES = UI_SCALES as readonly number[]
 export const useStore = create<State>((set, get) => ({
   scenario: BASE_SCENARIO,
   decisions: BASE_DECISIONS,
-  run: simulate(BASE_SCENARIO, BASE_DECISIONS),
+  ...(() => {
+    const run = simulate(BASE_SCENARIO, BASE_DECISIONS)
+    return { run, base: { decisions: BASE_DECISIONS, scenario: BASE_SCENARIO, summary: run.summary } }
+  })(),
+  running: false,
   // Arranca el primer lunes a media mañana, con la nave trabajando.
   t: 10,
   playing: true,
@@ -97,6 +119,16 @@ export const useStore = create<State>((set, get) => ({
   iconTint: saved('logi-iconos', (v): v is IconTint => typeof v === 'string' && ['sistema', 'azul', 'grafito', 'puerto', 'trazo'].includes(v), 'puerto'),
   uiScale: saved('logi-escala', (v): v is UiScale => typeof v === 'number' && SCALES.includes(v), 1),
 
+  apply: (decisions, scenario = get().scenario) => {
+    set({ decisions, scenario, running: true })
+    // Se deja pintar el aviso de "simulando" antes de bloquear el hilo.
+    setTimeout(() => set({ run: simulate(scenario, decisions), running: false, selection: null }), 30)
+  },
+  setBase: () => {
+    const { decisions, scenario, run } = get()
+    set({ base: { decisions, scenario, summary: run.summary } })
+  },
+  restoreBase: () => get().apply(get().base.decisions, get().base.scenario),
   setT: (t) => set({ t: Math.min(Math.max(0, t), HORIZON_DAYS * 24 - 0.01) }),
   advance: (seconds) => {
     const { playing, speed, t } = get()

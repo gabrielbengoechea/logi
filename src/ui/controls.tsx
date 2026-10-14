@@ -42,3 +42,35 @@ export function Toggle({ on, onChange, label }: { on: boolean; onChange: (on: bo
 export function SectionTitle({ children }: { children: ReactNode }) {
   return <div className="px-1 pb-1.5 text-[13px] font-semibold text-[var(--ink-2)]">{children}</div>
 }
+
+/** Paso a paso al estilo iOS: − valor +. */
+export function Stepper({ value, onChange, min, max, step = 1, format = (v) => String(v), label }: { value: number; onChange: (v: number) => void; min: number; max: number; step?: number; format?: (v: number) => string; label: string }) {
+  const fix = (v: number) => Math.round(Math.min(max, Math.max(min, v)) / step) * step
+  const btn = 'flex h-8 w-9 items-center justify-center text-[20px] font-light text-[var(--ink)] disabled:opacity-30'
+  return (
+    <div className="flex items-center gap-2">
+      <span className="min-w-[56px] text-right text-[15px] font-semibold tabular-nums">{format(value)}</span>
+      <div className="flex overflow-hidden rounded-[9px] bg-[var(--fill)] [&>*+*]:border-l [&>*+*]:border-[rgba(60,60,67,0.18)]">
+        <button className={btn} aria-label={`Menos ${label}`} disabled={value <= min} onClick={() => onChange(fix(value - step))}>
+          −
+        </button>
+        <button className={btn} aria-label={`Más ${label}`} disabled={value >= max} onClick={() => onChange(fix(value + step))}>
+          +
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Fila de lista agrupada: rótulo (con detalle opcional) y un control a la derecha. */
+export function Row({ label, detail, children }: { label: string; detail?: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-2">
+      <span className="flex flex-col">
+        <span className="text-[15px]">{label}</span>
+        {detail && <span className="text-[12px] leading-snug text-[var(--ink-2)]">{detail}</span>}
+      </span>
+      {children}
+    </div>
+  )
+}

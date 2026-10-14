@@ -28,6 +28,28 @@ export default function ProductCard({ id }: { id: number }) {
   const p = run.products[id]
   const fam = familyOf(p.family)
   const series = run.days.map((d) => d.palletsBySku[id])
+  const lv = run.sim.reorderLevels(id, run.days[day].forecastBySku[id], run.days[day].forecastDevBySku[id])
+  const u = (v: number) => `${int(v)} u`
+  const policy: [string, string, string?][] = [
+    ['Modelo', lv.model === 'continua' ? 'Revisión continua' : lv.model === 'periodica' ? `Revisión periódica, R = ${lv.R} días` : 'Can-order (con su proveedor)'],
+    ['Demanda (pronóstico)', `d = ${lv.d.toFixed(1).replace('.', ',')} u/día · σd = ${lv.sigmaD.toFixed(1).replace('.', ',')}`],
+    ['Lead time', `LT = ${lv.LT.toFixed(0)} días · σLT = ${lv.sigmaLT.toFixed(1).replace('.', ',')}`],
+    ['σc', lv.sigmaC.toFixed(1).replace('.', ','), lv.model === 'periodica' ? '√(σd²·(LT + R) + d²·σLT²)' : '√(σd²·LT + d²·σLT²)'],
+    ['k', lv.k.toFixed(2).replace('.', ',')],
+    ['Stock de seguridad', u(lv.SS), 'SS = k·σc'],
+    ...((lv.model === 'periodica'
+      ? [['NOP', u(lv.NOP), 'NOP = d·(LT + R) + k·σc']]
+      : [
+          ['ROP', u(lv.ROP), 'ROP = d·LT + k·σc'],
+          ['Q', u(lv.Q), `Q* = √(2·D·S/H) = ${int(lv.eoq)} u; S = USD ${int(lv.S)}, H = USD ${lv.H.toFixed(2).replace('.', ',')}`],
+          ...(lv.model === 'canorder'
+            ? [
+                ['COP', u(lv.COP), 'COP = ROP + d·S_ahorrado/(H_t·Q)'],
+                ['OBS', u(lv.OBS), 'OBS = ROP + Q'],
+              ]
+            : []),
+        ]) as [string, string, string?][]),
+  ]
   const rows: [string, string][] = [
     ['Código', p.code],
     ['Clase ABC', p.abc],
@@ -35,7 +57,7 @@ export default function ProductCard({ id }: { id: number }) {
     ['Demanda media', `${int(p.dailyDemand)} u/día (${(p.dailyDemand / p.unitsPerPallet).toFixed(1).replace('.', ',')} pallets)`],
     ['Unidades por pallet', `${p.unitsPerPallet} (${p.casesPerPallet} cajas de ${p.unitsPerCase})`],
     ['Costo y precio', `${money2(p.cost)} · ${money2(p.price)}`],
-    ['Pallets hoy', int(series[day])],
+    ['Stock hoy', `${int(series[day])} pallets`],
   ]
   return (
     <div>
@@ -59,6 +81,18 @@ export default function ProductCard({ id }: { id: number }) {
           <div key={k} className="flex justify-between gap-3 px-3 py-2 text-[14px]">
             <dt className="text-[var(--ink-2)]">{k}</dt>
             <dd className="text-right font-medium tabular-nums">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-4 mb-1.5 px-1 text-[13px] font-semibold text-[var(--ink-2)]">Su política hoy (clase {p.abc})</div>
+      <dl className="inset-list">
+        {policy.map(([k, v, f]) => (
+          <div key={k} className="px-3 py-1.5 text-[14px]">
+            <div className="flex justify-between gap-3">
+              <dt className="text-[var(--ink-2)]">{k}</dt>
+              <dd className="text-right font-medium tabular-nums">{v}</dd>
+            </div>
+            {f && <div className="text-[11.5px] text-[var(--ink-3)]">{f}</div>}
           </div>
         ))}
       </dl>
