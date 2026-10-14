@@ -5,7 +5,7 @@ import { Segmented } from './controls'
 import { Icon, type IconName } from './icons'
 import MovePanel from './NavPad'
 
-const VIEW_LABEL: Record<View, string> = { nave: 'Nave', andenes: 'Andenes', planta: 'Planta', exterior: 'Exterior' }
+const VIEW_LABEL: Record<View, string> = { nave: 'Nave', andenes: 'Andenes', planta: 'Planta', exterior: 'Exterior', mapa: 'Mapa' }
 
 /** Vistas de la cámara, como control segmentado. */
 export function ViewSwitcher() {
@@ -13,7 +13,7 @@ export function ViewSwitcher() {
   const setView = useStore((s) => s.setView)
   return (
     <div className="material pointer-events-auto rounded-[13px]">
-      <Segmented items={['nave', 'andenes', 'planta', 'exterior'] as const} value={view} onChange={setView} label={(v) => VIEW_LABEL[v]} />
+      <Segmented items={['nave', 'andenes', 'planta', 'exterior', 'mapa'] as const} value={view} onChange={setView} label={(v) => VIEW_LABEL[v]} />
     </div>
   )
 }

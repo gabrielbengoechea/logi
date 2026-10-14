@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useStore } from '../store'
 import { SectionTitle } from './controls'
 import { Icon, type IconName } from './icons'
+import Deliveries from './Deliveries'
 import Legend from './Legend'
 import ProductCard from './ProductCard'
 import Today from './Today'
@@ -24,9 +25,11 @@ function SoonRow({ icon, label, detail }: { icon: IconName; label: string; detai
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640)
   const selection = useStore((s) => s.selection)
+  const view = useStore((s) => s.view)
 
   let body: ReactNode
   if (selection?.kind === 'product') body = <ProductCard id={selection.id} />
+  else if (view === 'mapa') body = <Deliveries />
   else
     body = (
       <div className="space-y-5">
@@ -37,7 +40,6 @@ export default function Sidebar() {
           <div className="inset-list">
             <SoonRow icon="juego" label="Modo juego" detail="Próximamente" />
             <SoonRow icon="ajustes" label="Simulador" detail="Próximamente" />
-            <SoonRow icon="ruta" label="Mapa de entregas" detail="Próximamente" />
           </div>
         </div>
       </div>

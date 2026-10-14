@@ -135,11 +135,18 @@ function routeRef(r: Row): string | null {
 
 async function main() {
   // División política: país y departamentos.
-  const areas = await overtureRows('divisions', 'division_area', UY, ['subtype', 'country', 'names', 'class'], (r) => r.country === 'UY' && (r.subtype === 'country' || r.subtype === 'region'))
+  const VIEW: BBox = [-60.5, -36.5, -51.5, -29]
+  const areas = await overtureRows('divisions', 'division_area', VIEW, ['subtype', 'country', 'names', 'class'], (r) => (r.country === 'UY' && (r.subtype === 'country' || r.subtype === 'region')) || ((r.country === 'AR' || r.country === 'BR') && r.subtype === 'country'))
   const ring = (poly: number[][][], tol: number) => simplify(poly[0].map(km), tol).map(round)
-  const country = areas.filter((a) => a.subtype === 'country' && (a.class ?? 'land') === 'land').flatMap((a) => polygons(a.geometry).map((p) => ring(p, 0.4)))
+  // Países vecinos, recortados a la vista y simplificados (solo para dar contexto: tierra y agua).
+  const clip = (ring: number[][]) => ring.map(([lon, lat]) => [Math.min(VIEW[2], Math.max(VIEW[0], lon)), Math.min(VIEW[3], Math.max(VIEW[1], lat))])
+  const neighbors = areas
+    .filter((a) => a.country !== 'UY' && (a.class ?? 'land') === 'land')
+    .flatMap((a) => polygons(a.geometry).map((p) => simplify(clip(p[0]).map(km), 1.5).map(round)))
+    .filter((r) => r.length > 3)
+  const country = areas.filter((a) => a.country === 'UY' && a.subtype === 'country' && (a.class ?? 'land') === 'land').flatMap((a) => polygons(a.geometry).map((p) => ring(p, 0.4)))
   const departments = areas
-    .filter((a) => a.subtype === 'region' && (a.class ?? 'land') === 'land')
+    .filter((a) => a.country === 'UY' && a.subtype === 'region' && (a.class ?? 'land') === 'land')
     .flatMap((a) => polygons(a.geometry).map((p) => ({ name: primaryName(a), ring: ring(p, 0.6) })))
     .filter((d) => d.ring.length > 3)
 
@@ -253,6 +260,7 @@ async function main() {
     depot: round(km(DEPOT.at)),
     cities: CLIENTS.map((c) => ({ key: c.key, name: c.name, at: round(km(c.at)) })),
     country,
+    neighbors,
     departments,
     roads,
     routes,

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { BASE_DECISIONS, BASE_SCENARIO, Simulation, type DayStats, type Decisions, type Scenario } from './sim/engine'
 import type { Product } from './sim/catalog'
 
-export type View = 'nave' | 'andenes' | 'planta' | 'exterior'
+export type View = 'nave' | 'andenes' | 'planta' | 'exterior' | 'mapa'
 /** Calidad gráfica: alta (sombras, oclusión ambiental y brillo), media (sin oclusión) o baja (sin efectos). */
 export type Quality = 'alta' | 'media' | 'baja'
 /** Color de los pallets: por familia de producto o por clase ABC. */

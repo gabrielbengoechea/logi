@@ -21,7 +21,8 @@ const NIGHT_HEMI_GROUND = new THREE.Color('#0b1220')
  * Cielo, sol, luna, reflejos y niebla según la hora simulada. Las sombras cubren la nave y el patio (±120 m).
  * Todo es procedural: no se descarga ningún mapa de entorno.
  */
-export default function Lighting() {
+/** `far`: en el mapa (escala de kilómetros) la niebla empieza mucho más lejos. */
+export default function Lighting({ far = false }: { far?: boolean }) {
   const sun = useRef<THREE.DirectionalLight>(null)
   const moon = useRef<THREE.DirectionalLight>(null)
   const hemi = useRef<THREE.HemisphereLight>(null)
@@ -78,7 +79,7 @@ export default function Lighting() {
     <>
       <Sky ref={sky} distance={8000} turbidity={5} rayleigh={1.1} mieCoefficient={0.004} mieDirectionalG={0.85} />
       <Stars ref={stars} radius={3000} depth={600} count={3000} factor={60} saturation={0} fade />
-      <fog attach="fog" args={['#cfdfeb', 900, 5000]} />
+      <fog key={far ? 'lejos' : 'cerca'} attach="fog" args={['#cfdfeb', far ? 4000 : 900, far ? 30000 : 5000]} />
       <hemisphereLight ref={hemi} args={['#eaf4ff', '#9fb1c2', 1.1]} />
       <directionalLight
         key={shadows ? 'con-sombras' : 'sin-sombras'}

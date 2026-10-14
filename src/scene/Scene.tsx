@@ -8,6 +8,7 @@ import Docks from './Docks'
 import Effects from './Effects'
 import Forklifts from './Forklifts'
 import Lighting from './Lighting'
+import MapScene from './MapScene'
 import Racks from './Racks'
 import Site from './Site'
 import { listenKeyboard, nav } from './navInput'
@@ -18,6 +19,8 @@ export const VIEWS: Record<View, [number, number, number, number, number, number
   andenes: [18, 13, 92, -6, 2, 30],
   planta: [0, 175, 0.1, 0, 0, 0],
   exterior: [-170, 70, 190, -10, 0, 10],
+  // En el mapa, 1 unidad = 1 km.
+  mapa: [20, 820, 520, 10, 0, 40],
 }
 
 function Clock() {
@@ -84,15 +87,21 @@ export default function Scene() {
 
   return (
     <>
-      <Lighting />
-      <CameraControls ref={controls} minDistance={3} maxDistance={900} maxPolarAngle={1.52} dollyToCursor infinityDolly />
+      <Lighting far={view === 'mapa'} />
+      <CameraControls ref={controls} minDistance={3} maxDistance={view === 'mapa' ? 2500 : 900} maxPolarAngle={view === 'mapa' ? 1.2 : 1.52} dollyToCursor infinityDolly />
       <Clock />
       <FreeNav controls={controls} />
-      <Site />
-      <Building />
-      <Racks />
-      <Docks />
-      <Forklifts />
+      {view === 'mapa' ? (
+        <MapScene />
+      ) : (
+        <>
+          <Site />
+          <Building />
+          <Racks />
+          <Docks />
+          <Forklifts />
+        </>
+      )}
       <Effects />
     </>
   )
