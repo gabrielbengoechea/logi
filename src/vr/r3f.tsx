@@ -14,7 +14,10 @@ import type { Tarjeta } from './tarjetas'
 import { mostrarPortada } from './tutorial'
 
 /** Sesión WebXR: 72 Hz (el Quest 2 tiene margen), renderizado foveado y controles con rayo (sin manos). */
-const emular = typeof location !== 'undefined' && new URLSearchParams(location.search).get('emular') === '1'
+const params = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams()
+const emular = params.get('emular') === '1'
+/** ?debug=1 deja el jugador y el mundo de colisión en window.__vr (para pruebas). */
+const depurar = params.get('debug') === '1'
 
 export const xrStore = createXRStore({
   offerSession: false,
@@ -106,6 +109,7 @@ export function Recorrido({ config, cerca = 0.08, lejos = 9000, alEntrar, alSali
       },
     })
     rec.current = r
+    if (depurar) Object.assign(window, { __vr: { recorrido: r, jugador: r.jugador, mundo: r.mundo } })
     // Un cuadro de margen: la escena termina de montarse con la calidad del visor antes de armar las colisiones.
     const t = setTimeout(() => r.iniciar(), 50)
     return () => {
@@ -143,6 +147,7 @@ export function Recorrido({ config, cerca = 0.08, lejos = 9000, alEntrar, alSali
       persp.fov = 70
       persp.updateProjectionMatrix()
       caminata.current = { c, j }
+      if (depurar) Object.assign(window, { __vr: { jugador: j, caminata: c, mundo } })
     }, 50)
     return () => {
       clearTimeout(t)
