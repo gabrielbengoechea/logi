@@ -12,6 +12,8 @@ import MapScene from './MapScene'
 import Racks from './Racks'
 import Site from './Site'
 import { listenKeyboard, nav } from './navInput'
+import { configRecorrido } from '../vr/app'
+import { Recorrido, modoVR, useEnXR, xrStore } from '../vr/r3f'
 
 /** Cámara de cada vista: posición y punto mirado. */
 export const VIEWS: Record<View, [number, number, number, number, number, number]> = {
@@ -75,34 +77,64 @@ function FreeNav({ controls }: { controls: React.RefObject<CameraControls | null
   return null
 }
 
+/** Lo que había antes de entrar al recorrido (vista y calidad), para dejarlo igual al salir. */
+let antesDelRecorrido: { view: View; quality: ReturnType<typeof useStore.getState>['quality']; locked: boolean } | null = null
+
+function alEntrarRecorrido() {
+  const s = useStore.getState()
+  antesDelRecorrido = { view: s.view, quality: s.quality, locked: s.qualityLocked }
+  // Vista exterior: las paredes se dibujan de los dos lados, así se ven al caminar por dentro y por fuera.
+  if (s.view !== 'exterior') s.setView('exterior')
+  // En el visor: sin posprocesado ni sombras (el Quest 2 necesita 72 cuadros por segundo estables).
+  if (xrStore.getState().session) s.setQuality('baja', true)
+}
+
+function alSalirRecorrido() {
+  const a = antesDelRecorrido
+  antesDelRecorrido = null
+  if (!a) return
+  const s = useStore.getState()
+  s.setView(a.view)
+  if (s.quality !== a.quality) useStore.setState({ quality: a.quality, qualityLocked: a.locked })
+}
+
 export default function Scene() {
   const controls = useRef<CameraControls>(null)
+  const escenario = useRef<THREE.Group>(null)
   const view = useStore((s) => s.view)
+  const enXR = useEnXR()
+  const aPie = modoVR((s) => s.aPie)
+  // La cámara libre (órbita, teclado, doble clic) se apaga mientras se camina, en el visor o en la pantalla.
+  const libre = !enXR && !aPie
 
   useEffect(() => {
     const c = controls.current
     if (!c) return
-    c.setLookAt(...VIEWS[view], true)
-  }, [view])
+    c.setLookAt(...VIEWS[view], !libre ? false : true)
+  }, [view, libre])
 
   return (
     <>
       <Lighting far={view === 'mapa'} />
-      <CameraControls ref={controls} minDistance={3} maxDistance={view === 'mapa' ? 2500 : 900} maxPolarAngle={view === 'mapa' ? 1.2 : 1.52} dollyToCursor infinityDolly />
+      {libre && <CameraControls ref={controls} minDistance={3} maxDistance={view === 'mapa' ? 2500 : 900} maxPolarAngle={view === 'mapa' ? 1.2 : 1.52} dollyToCursor infinityDolly />}
       <Clock />
-      <FreeNav controls={controls} />
+      {libre && <FreeNav controls={controls} />}
       {view === 'mapa' ? (
         <MapScene />
       ) : (
         <>
-          <Site />
-          <Building />
-          <Racks />
-          <Docks />
+          {/* Todo lo que está quieto y se puede chocar caminando. Los autoelevadores se mueven: quedan afuera. */}
+          <group ref={escenario}>
+            <Site />
+            <Building />
+            <Racks />
+            <Docks />
+          </group>
           <Forklifts />
         </>
       )}
-      <Effects />
+      <Recorrido config={() => configRecorrido(escenario)} cerca={0.08} lejos={9000} alEntrar={alEntrarRecorrido} alSalir={alSalirRecorrido} />
+      {!enXR && <Effects />}
     </>
   )
 }
