@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useEnXR } from '../vr/r3f'
 import { DOCKS, HALL } from '../sim/warehouse'
 import { registerGlow } from './environment'
 import { Instances, type Box } from './Instances'
@@ -223,6 +224,7 @@ function Neighbor({ x, z, w, d, h }: { x: number; z: number; w: number; d: numbe
 }
 
 export default function Site() {
+  const enXR = useEnXR()
   const asphalt = useMemo(() => new THREE.MeshStandardMaterial({ map: asphaltColor(), roughness: 0.92 }), [])
   const grass = useMemo(() => new THREE.MeshStandardMaterial({ map: grassColor(), roughness: 1 }), [])
   const curb = useMemo(() => new THREE.MeshStandardMaterial({ color: '#c3c6c8', roughness: 0.9 }), [])
@@ -348,9 +350,11 @@ export default function Site() {
       <Instances boxes={fenceMesh} material={meshMaterial} receiveShadow={false} />
       <Neighbor x={300} z={-40} w={150} d={80} h={12} />
       <Neighbor x={40} z={-270} w={180} d={90} h={13} />
-      <Html position={[RUTA5_X, 8, -40]} center zIndexRange={[10, 0]}>
-        <Tag tone="muted">Ruta 5</Tag>
-      </Html>
+      {!enXR && (
+        <Html position={[RUTA5_X, 8, -40]} center zIndexRange={[10, 0]}>
+          <Tag tone="muted">Ruta 5</Tag>
+        </Html>
+      )}
     </group>
   )
 }

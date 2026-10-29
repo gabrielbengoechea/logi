@@ -1,6 +1,7 @@
 // Recorrido en VR del Centro Logístico: tutorial, punto de partida y zona caminable.
 import * as THREE from 'three'
 import type { ConfigRecorrido } from './recorrido'
+import { menuNave } from './escenas-nave'
 import { tarjetaResumen, tarjetasControles, type Tarjeta } from './tarjetas'
 
 export const TITULO = 'Centro Logístico 3D'
@@ -14,6 +15,7 @@ const portada: Tarjeta = {
     'Caminá entre las estanterías, la playa de andenes y el patio de camiones',
     'Apuntá a un pallet y apretá el gatillo para ver su producto y su política de inventario',
     'Mirá trabajar a los autoelevadores y la llegada de los camiones',
+    'Con el gatillo izquierdo abrís el menú: manejás el reloj y lanzás escenas guiadas como la recepción o el despacho',
   ],
 }
 
@@ -44,7 +46,9 @@ export function configRecorrido(escenario: React.RefObject<THREE.Object3D | null
     inicio: { pos: new THREE.Vector3(-34, 0, 24), yaw: -Math.PI / 2 },
     limites: LIMITES,
     colisionables: () => (escenario.current ? [escenario.current] : []),
-    excluir: (o) => 'isSky' in o || (o as THREE.Points).isPoints === true || (o as THREE.Line).isLine === true,
+    // Los camiones se mueven: no se chocan (si no, quedarían paredes invisibles donde estaban al entrar).
+    excluir: (o) => 'isSky' in o || (o as THREE.Points).isPoints === true || (o as THREE.Line).isLine === true || o.name.startsWith('truck-'),
     velocidad: 2.2,
+    menu: menuNave(),
   }
 }

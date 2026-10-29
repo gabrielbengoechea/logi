@@ -22,6 +22,9 @@ export default function Hud() {
   useEffect(() => {
     document.documentElement.dataset.icons = iconTint
   }, [iconTint])
+  const enXR = useEnXR()
+  // En el visor la página no se ve: solo queda la ficha que lee el visor.
+  if (enXR) return <FichaParaVisor />
   const scale = uiScale * (presenting ? PRESENT_ZOOM : 1)
   const zoom = scale !== 1 ? { zoom: scale } : undefined
 
