@@ -16,6 +16,25 @@ departamentales. Tiene modo juego (decisiones semana a semana, con competencia e
 
 El plan está en [`docs/plan.md`](docs/plan.md) y la guía para el docente en [`docs/guia-docente.md`](docs/guia-docente.md).
 
+
+## Recorrido en VR (Meta Quest 2 y 3)
+
+Este fork suma un recorrido a pie en realidad virtual. Publicado en **https://gabrielbengoechea.github.io/logi/**.
+
+1. En el Quest, abrir la dirección en el navegador del visor y tocar **Entrar en VR** (o el ícono del visor arriba a la derecha).
+2. Antes de empezar aparece un **tutorial ilustrado** con los controles (como en Mission:ISS). Se avanza con el gatillo.
+3. Controles: **stick izquierdo** caminar (click: correr) · **stick derecho** girar 30° y, hacia adelante, arco de **teletransporte** · **gatillo** ficha de lo que se apunta · **Y** volver al punto de partida · **B** ver el tutorial de nuevo.
+4. Las mallas son colisionables: paredes, estanterías, contenedores y máquinas no se atraviesan (cápsula contra la geometría real con three-mesh-bvh). Si alguien cae al agua o a un vacío, vuelve a tierra firme.
+5. Se empieza sobre el pasillo peatonal de la nave; la vista pasa sola a «Exterior» para que las paredes se vean de los dos lados.
+
+Sin visor: botón **A pie** para recorrer en primera persona con W A S D y el mouse, con las mismas colisiones.
+
+Rendimiento en el Quest 2: 72 Hz, renderizado foveado y, dentro del visor, sin posprocesado ni sombras dinámicas.
+
+Para probar sin visor: `?emular=1` simula un Quest en la computadora y `?debug=1` deja el jugador en `window.__vr`.
+
+El código del recorrido está en `src/vr/` (tutorial, mundo de colisión, jugador, locomoción) y tiene sus pruebas en `fisica.test.ts`.
+
 ## Desarrollo
 
 ```sh
